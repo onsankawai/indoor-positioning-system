@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">IndoorPosition</string>
+    <string name="action_settings">Settings</string>
+    
+    
+    <string name="tab_title_map">map</string><string name="tab_title_settings">settings</string><string name="title_map">Map</string><string name="title_settings">Settings</string>
+    
+
+</resources>
