@@ -1,8 +1,8 @@
 #1st Meeting Fall 09/09/2013
 
 = Introduction =
-  #Discussion work plan in this month
-  #Division of labor
+  # Discussion work plan in this month
+  # Division of labor
 
 = Details =
   * Obtain reference point using GPS
