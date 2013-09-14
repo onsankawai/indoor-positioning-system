@@ -8,6 +8,10 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.Rect;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -32,6 +36,14 @@ public class MapSectionFragment extends Fragment{
 
 	private double latitude = 0;
 	private double longitude = 0;
+	private double bearing = 0;
+	
+	private SensorManager mSensorManager;
+	private Sensor mOrientation;
+	
+	float azimuth_angle;
+    float pitch_angle;
+    float roll_angle;
 	
 	MapView map;
 	Bitmap mapPic;
@@ -52,6 +64,12 @@ public class MapSectionFragment extends Fragment{
 		//titleTextView.setText(Integer.toString(getArguments().getInt(ARG_SECTION_NUMBER)));
 		//titleTextView.setText(R.string.title_map);
 		//titleTextView.setTextColor(getResources().getColor(R.color.light_grey));
+
+		// sensor init
+		mSensorManager = (SensorManager) this.getActivity().getSystemService(Context.SENSOR_SERVICE);
+	    mOrientation = mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
+	    mSensorManager.registerListener(sensorListener, mOrientation, SensorManager.SENSOR_DELAY_NORMAL);
+		
 		// location manager init
 		locationManager = (LocationManager) this.getActivity().getSystemService(Context.LOCATION_SERVICE);
 		
@@ -96,6 +114,7 @@ public class MapSectionFragment extends Fragment{
 			Log.d("IndoorDebug", "longitude:" + location.getLongitude());
 			latitude = location.getLatitude();
 			longitude = location.getLongitude();
+			bearing = location.getBearing();
 			map.postInvalidate();
 		}
 
@@ -114,6 +133,26 @@ public class MapSectionFragment extends Fragment{
 		@Override
 		public void onStatusChanged(String provider, int status, Bundle extras) {
 			// TODO Auto-generated method stub
+			
+		}
+		
+	};
+	
+	protected SensorEventListener sensorListener = new SensorEventListener() {
+
+		@Override
+		public void onAccuracyChanged(Sensor sensor, int accuracy) {
+			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public void onSensorChanged(SensorEvent event) {
+			// TODO Auto-generated method stub
+			azimuth_angle = event.values[0];
+		    pitch_angle = event.values[1];
+		    roll_angle = event.values[2];
+		    map.postInvalidate();
 			
 		}
 		
@@ -138,8 +177,12 @@ public class MapSectionFragment extends Fragment{
 		    canvas.drawCircle(380, 84, 6, paint);
 		    canvas.drawCircle(380, 240, 6, paint);
 		    canvas.drawCircle(516, 240, 6, paint);
-		    canvas.drawText("Lat: "+latitude, 0, 500, paint);
+		    canvas.drawText("azimuth: "+azimuth_angle, 0, 300, paint);
+		    canvas.drawText("pitch: "+pitch_angle, 0, 400, paint);
+		    canvas.drawText("roll:"+roll_angle, 0, 500, paint);
+		    canvas.drawText("Lat: "+latitude, 0, 600, paint);
 		    canvas.drawText("Long: "+longitude, 0, 700, paint);
+		    canvas.drawText("Bearing:"+bearing, 0, 800, paint);
 		}
 
 		public void handleScroll(float distanceX, float distanceY) {
