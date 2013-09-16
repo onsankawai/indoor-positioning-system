@@ -1,0 +1,14 @@
+#2nd Meeting Fall 16/09/2013
+
+= Introduction =
+  # Changes on division of labor
+  # Progress monitoring
+  # Changes on implementation
+
+= Details =
+  * Obtain reference point using GPS - David
+  * ~~Gyroscope to obtain angle~~
+  * Accelerometer to obtain moving distance - Tracey
+  * Position Sensor to obtain moving orientation - Tracey
+
+  
