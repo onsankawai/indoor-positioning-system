@@ -1,13 +1,16 @@
 package fyp.hkust.doorposition;
 
 import android.support.v4.app.Fragment;
+import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.Rect;
+import android.graphics.drawable.BitmapDrawable;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -38,23 +41,34 @@ public class MapSectionFragment extends Fragment{
 	private double longitude = 0;
 	private double bearing = 0;
 	
-	private SensorManager mSensorManager;
-	private Sensor mOrientation;
+	private SensorManager mAccManager;
+	private Sensor mAccelerometer; 
+
+	private SensorManager mMagManager;
+	private Sensor mMagnetic; 
 	
-	float azimuth_angle;
+	double azimuth_angle;
     float pitch_angle;
     float roll_angle;
+    float geomagnetic[];
+    float accValues[];
+    boolean sensorReady;
 	
 	MapView map;
 	Bitmap mapPic;
 	Bitmap pointerPic;
 	Paint paint;
 	Rect mapDisplayRect;
+	Rect ptrDisplayRect;
+	Bitmap bmp2;
 	LocationManager locationManager;
 	
 	public MapSectionFragment() {
 	}
 
+
+	
+	
 	@Override
 	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		//View rootView = inflater.inflate(R.layout.map,container, false);
@@ -65,10 +79,16 @@ public class MapSectionFragment extends Fragment{
 		//titleTextView.setText(R.string.title_map);
 		//titleTextView.setTextColor(getResources().getColor(R.color.light_grey));
 
-		// sensor init
-		mSensorManager = (SensorManager) this.getActivity().getSystemService(Context.SENSOR_SERVICE);
-	    mOrientation = mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
-	    mSensorManager.registerListener(sensorListener, mOrientation, SensorManager.SENSOR_DELAY_NORMAL);
+		// magnetic field sensor init
+		mMagManager = (SensorManager) this.getActivity().getSystemService(Context.SENSOR_SERVICE);
+	    mMagnetic = mMagManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+	    mMagManager.registerListener(sensorListener, mMagnetic, SensorManager.SENSOR_DELAY_NORMAL);
+		
+		// accelerometer sensor init
+		mAccManager = (SensorManager) this.getActivity().getSystemService(Context.SENSOR_SERVICE);
+	    mAccelerometer = mAccManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+	    mAccManager.registerListener(sensorListener, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL); 
+		
 		
 		// location manager init
 		locationManager = (LocationManager) this.getActivity().getSystemService(Context.LOCATION_SERVICE);
@@ -94,9 +114,10 @@ public class MapSectionFragment extends Fragment{
 		Bitmap bmp = BitmapFactory.decodeResource(getResources(), R.drawable.atrium_map);
 		mapPic = Bitmap.createBitmap(bmp);
 		
+		ptrDisplayRect = new Rect(350, 550, 400, 600); 
 		// Create bitmap - pointer
-		bmp = BitmapFactory.decodeResource(getResources(), R.drawable.pointer);
-	    pointerPic = Bitmap.createBitmap(bmp);
+		bmp2 = BitmapFactory.decodeResource(getResources(), R.drawable.pointer);
+		pointerPic = Bitmap.createBitmap(bmp2);
 		
 		map = new MapView(this.getActivity());
 		
@@ -146,17 +167,43 @@ public class MapSectionFragment extends Fragment{
 			
 		}
 
+		@SuppressWarnings("static-access")
 		@Override
 		public void onSensorChanged(SensorEvent event) {
 			// TODO Auto-generated method stub
-			azimuth_angle = event.values[0];
-		    pitch_angle = event.values[1];
-		    roll_angle = event.values[2];
-		    map.postInvalidate();
+
+			switch (event.sensor.getType()) {
+		    	case Sensor.TYPE_MAGNETIC_FIELD:
+		    		geomagnetic = event.values.clone();
+		    		sensorReady = true;
+		        break;
+		    case Sensor.TYPE_ACCELEROMETER:
+		        	accValues = event.values.clone();
+		    }   
+
+		    if (geomagnetic != null && accValues != null && sensorReady) {
+		        sensorReady = false;
+
+		        float[] R = new float[16];
+		        float[] I = new float[16];
+
+		        SensorManager.getRotationMatrix(R, I, accValues, geomagnetic);
+
+		        float[] actual_orientation = new float[3];
+		        SensorManager.getOrientation(R, actual_orientation);
+	    	  	azimuth_angle = (actual_orientation[0] * 180) / Math.PI;
+	    	  	if (azimuth_angle < 0)
+	    	  		azimuth_angle = 360 + (actual_orientation[0] * 180) / Math.PI ;
+			    pitch_angle = actual_orientation[1];
+			    roll_angle = actual_orientation[2];
+		 }
+		    map.postInvalidate();   
 			
-		}
+		}  
 		
 	};
+	
+
 	
 	class MapView extends View
 	{
@@ -170,7 +217,11 @@ public class MapSectionFragment extends Fragment{
 		@Override
 		protected void onDraw(Canvas canvas){
 			canvas.drawBitmap(mapPic, null, mapDisplayRect, paint);
-			//canvas.drawBitmap(pointer, null, new Rect(), paint);
+			Matrix mtx = new Matrix();
+			mtx.setRotate((float) azimuth_angle + 90);
+			pointerPic = Bitmap.createBitmap(bmp2, 0, 0, bmp2.getWidth(), bmp2.getHeight(), mtx, true);
+			canvas.drawBitmap(pointerPic, null, ptrDisplayRect, paint);
+		//	canvas.drawBitmap(pointerPic, mtx, paint);
 			//canvas.drawColor(R.color.red);
 			paint.setColor(getResources().getColor(R.color.red));
 			paint.setTextSize(40);
@@ -179,7 +230,7 @@ public class MapSectionFragment extends Fragment{
 		    canvas.drawCircle(516, 240, 6, paint);
 		    canvas.drawText("azimuth: "+azimuth_angle, 0, 300, paint);
 		    canvas.drawText("pitch: "+pitch_angle, 0, 400, paint);
-		    canvas.drawText("roll:"+roll_angle, 0, 500, paint);
+		    canvas.drawText("roll:"+roll_angle, 0, 500, paint); 
 		    canvas.drawText("Lat: "+latitude, 0, 600, paint);
 		    canvas.drawText("Long: "+longitude, 0, 700, paint);
 		    canvas.drawText("Bearing:"+bearing, 0, 800, paint);
