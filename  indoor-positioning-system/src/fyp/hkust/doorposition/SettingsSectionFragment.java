@@ -16,10 +16,7 @@ public class SettingsSectionFragment extends Fragment {
 			Bundle savedInstanceState) {
 		View rootView = inflater.inflate(R.layout.settings,
 				container, false);
-		TextView titleTextView = (TextView) rootView
-				.findViewById(R.id.view_settings_title);
-		//titleTextView.setText(Integer.toString(getArguments().getInt(ARG_SECTION_NUMBER)));
-		titleTextView.setText(R.string.title_settings);
+		
 		int i = 0;
 		return rootView;
 	}

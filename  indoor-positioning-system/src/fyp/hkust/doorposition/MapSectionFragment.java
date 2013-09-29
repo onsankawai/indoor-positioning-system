@@ -21,22 +21,22 @@ import android.location.LocationManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Display;
-import android.view.GestureDetector;
-import android.view.GestureDetector.OnGestureListener;
 import android.view.LayoutInflater;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.widget.TextView;
 
 public class MapSectionFragment extends Fragment{
 
 	private static final int MAP_X_MAX = 800;
 	private static final int MAP_Y_MAX = 600;
-	private int scrollX = 0;
-	private int scrollY = 0;
-
+	private int mapWidth = 0;
+	private int mapHeight = 0;
+	private int x_coor = 0;
+	private int y_coor = 0;
+	private float accuracy = 0;
+	
+	
 	private double latitude = 0;
 	private double longitude = 0;
 	private double bearing = 0;
@@ -55,6 +55,7 @@ public class MapSectionFragment extends Fragment{
     boolean sensorReady;
 	
 	MapView map;
+	MapPointer pointer;
 	Bitmap mapPic;
 	Bitmap pointerPic;
 	Paint paint;
@@ -108,8 +109,10 @@ public class MapSectionFragment extends Fragment{
 		
 		Log.d("IndoorDebug", "Width:" + width);
 		Log.d("IndoorDebug", "Height:" + height);
+		mapWidth = width;
+		mapHeight = height-242;
 		
-		mapDisplayRect = new Rect(0,0,width,height-242);
+		mapDisplayRect = new Rect(0,0,mapWidth,mapHeight);
 		// Create bitmap - MAP
 		Bitmap bmp = BitmapFactory.decodeResource(getResources(), R.drawable.atrium_map);
 		mapPic = Bitmap.createBitmap(bmp);
@@ -121,6 +124,11 @@ public class MapSectionFragment extends Fragment{
 		
 		map = new MapView(this.getActivity());
 		
+		// Create Pointer
+		pointer = new MapPointer();
+		pointer.computeCoordinate(pointer.refLat2, pointer.refLon2);
+		pointerDisplayRect = new Rect(0,0,40,40);
+		
 		return map;
 		
 	}
@@ -131,11 +139,20 @@ public class MapSectionFragment extends Fragment{
 		@Override
 		public void onLocationChanged(Location location) {
 			// TODO Auto-generated method stub
-			Log.d("IndoorDebug", "latitude:" + location.getLatitude());
-			Log.d("IndoorDebug", "longitude:" + location.getLongitude());
+			//Log.d("IndoorDebug", "latitude:" + location.getLatitude());
+			//Log.d("IndoorDebug", "longitude:" + location.getLongitude());
+			accuracy = location.getAccuracy();
 			latitude = location.getLatitude();
 			longitude = location.getLongitude();
-			bearing = location.getBearing();
+			if (accuracy <= 6.0) {
+				
+				//bearing = location.getBearing();
+				pointer.computeCoordinate(latitude, longitude);
+				x_coor = pointer.point.x;
+				y_coor = pointer.point.y;
+				pointerDisplayRect = new Rect(x_coor-20,y_coor-20,x_coor+20,y_coor+20);
+				//map.postInvalidate();
+			}
 			map.postInvalidate();
 		}
 
@@ -225,7 +242,7 @@ public class MapSectionFragment extends Fragment{
 			//canvas.drawColor(R.color.red);
 			paint.setColor(getResources().getColor(R.color.red));
 			paint.setTextSize(40);
-		    canvas.drawCircle(380, 84, 6, paint);
+		    //canvas.drawCircle(380, 84, 6, paint);
 		    canvas.drawCircle(380, 240, 6, paint);
 		    canvas.drawCircle(516, 240, 6, paint);
 		    canvas.drawText("azimuth: "+azimuth_angle, 0, 300, paint);
@@ -233,7 +250,7 @@ public class MapSectionFragment extends Fragment{
 		    canvas.drawText("roll:"+roll_angle, 0, 500, paint); 
 		    canvas.drawText("Lat: "+latitude, 0, 600, paint);
 		    canvas.drawText("Long: "+longitude, 0, 700, paint);
-		    canvas.drawText("Bearing:"+bearing, 0, 800, paint);
+		    //canvas.drawText("Bearing:"+bearing, 0, 800, paint);
 		}
 
 		public void handleScroll(float distanceX, float distanceY) {
