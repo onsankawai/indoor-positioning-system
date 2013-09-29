@@ -1,7 +1,6 @@
 package fyp.hkust.doorposition;
 
 import android.support.v4.app.Fragment;
-import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -10,7 +9,6 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.Rect;
-import android.graphics.drawable.BitmapDrawable;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -48,8 +46,8 @@ public class MapSectionFragment extends Fragment{
 	private Sensor mMagnetic; 
 	
 	double azimuth_angle;
-    float pitch_angle;
-    float roll_angle;
+    double pitch_angle;
+    double roll_angle;
     float geomagnetic[];
     float accValues[];
     boolean sensorReady;
@@ -61,7 +59,7 @@ public class MapSectionFragment extends Fragment{
 	Paint paint;
 	Rect mapDisplayRect;
 	Rect ptrDisplayRect;
-	Bitmap bmp2;
+	//Bitmap bmp2;
 	LocationManager locationManager;
 	
 	public MapSectionFragment() {
@@ -119,15 +117,16 @@ public class MapSectionFragment extends Fragment{
 		
 		ptrDisplayRect = new Rect(350, 550, 400, 600); 
 		// Create bitmap - pointer
-		bmp2 = BitmapFactory.decodeResource(getResources(), R.drawable.pointer);
-		pointerPic = Bitmap.createBitmap(bmp2);
+		bmp = BitmapFactory.decodeResource(getResources(), R.drawable.pointer);
+		pointerPic = Bitmap.createScaledBitmap(bmp, 40, 40,true);
+		//pointerPic = Bitmap.createBitmap(bmp);
 		
 		map = new MapView(this.getActivity());
 		
 		// Create Pointer
 		pointer = new MapPointer();
 		pointer.computeCoordinate(pointer.refLat2, pointer.refLon2);
-		pointerDisplayRect = new Rect(0,0,40,40);
+		//pointerDisplayRect = new Rect(0,0,40,40);
 		
 		return map;
 		
@@ -150,7 +149,7 @@ public class MapSectionFragment extends Fragment{
 				pointer.computeCoordinate(latitude, longitude);
 				x_coor = pointer.point.x;
 				y_coor = pointer.point.y;
-				pointerDisplayRect = new Rect(x_coor-20,y_coor-20,x_coor+20,y_coor+20);
+			//	pointerDisplayRect = new Rect(x_coor-20,y_coor-20,x_coor+20,y_coor+20);
 				//map.postInvalidate();
 			}
 			map.postInvalidate();
@@ -184,7 +183,6 @@ public class MapSectionFragment extends Fragment{
 			
 		}
 
-		@SuppressWarnings("static-access")
 		@Override
 		public void onSensorChanged(SensorEvent event) {
 			// TODO Auto-generated method stub
@@ -193,8 +191,8 @@ public class MapSectionFragment extends Fragment{
 		    	case Sensor.TYPE_MAGNETIC_FIELD:
 		    		geomagnetic = event.values.clone();
 		    		sensorReady = true;
-		        break;
-		    case Sensor.TYPE_ACCELEROMETER:
+		    		break;
+		    	case Sensor.TYPE_ACCELEROMETER:
 		        	accValues = event.values.clone();
 		    }   
 
@@ -208,12 +206,15 @@ public class MapSectionFragment extends Fragment{
 
 		        float[] actual_orientation = new float[3];
 		        SensorManager.getOrientation(R, actual_orientation);
-	    	  	azimuth_angle = (actual_orientation[0] * 180) / Math.PI;
-	    	  	if (azimuth_angle < 0)
-	    	  		azimuth_angle = 360 + (actual_orientation[0] * 180) / Math.PI ;
-			    pitch_angle = actual_orientation[1];
-			    roll_angle = actual_orientation[2];
-		 }
+	    	  	pointer.azimuth_angle = (360 + Math.toDegrees(actual_orientation[0])) % 360;
+	    	  	
+	    	  	// set rotation and x,y-translation
+			    Matrix mtx = new Matrix();
+				mtx.postRotate((float) pointer.azimuth_angle - 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
+				mtx.postTranslate(350, 550);
+				pointer.position.set(mtx);
+				
+		    }
 		    map.postInvalidate();   
 			
 		}  
@@ -234,10 +235,8 @@ public class MapSectionFragment extends Fragment{
 		@Override
 		protected void onDraw(Canvas canvas){
 			canvas.drawBitmap(mapPic, null, mapDisplayRect, paint);
-			Matrix mtx = new Matrix();
-			mtx.setRotate((float) azimuth_angle + 90);
-			pointerPic = Bitmap.createBitmap(bmp2, 0, 0, bmp2.getWidth(), bmp2.getHeight(), mtx, true);
-			canvas.drawBitmap(pointerPic, null, ptrDisplayRect, paint);
+			//pointerPic = Bitmap.createBitmap(bmp2, 0, 0, bmp2.getWidth(), bmp2.getHeight(), mtx, true);
+			canvas.drawBitmap(pointerPic, pointer.position, paint);
 		//	canvas.drawBitmap(pointerPic, mtx, paint);
 			//canvas.drawColor(R.color.red);
 			paint.setColor(getResources().getColor(R.color.red));
@@ -245,9 +244,7 @@ public class MapSectionFragment extends Fragment{
 		    //canvas.drawCircle(380, 84, 6, paint);
 		    canvas.drawCircle(380, 240, 6, paint);
 		    canvas.drawCircle(516, 240, 6, paint);
-		    canvas.drawText("azimuth: "+azimuth_angle, 0, 300, paint);
-		    canvas.drawText("pitch: "+pitch_angle, 0, 400, paint);
-		    canvas.drawText("roll:"+roll_angle, 0, 500, paint); 
+		    canvas.drawText("azimuth: "+pointer.azimuth_angle, 0, 300, paint);
 		    canvas.drawText("Lat: "+latitude, 0, 600, paint);
 		    canvas.drawText("Long: "+longitude, 0, 700, paint);
 		    //canvas.drawText("Bearing:"+bearing, 0, 800, paint);

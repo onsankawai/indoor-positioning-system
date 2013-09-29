@@ -1,5 +1,6 @@
 package fyp.hkust.doorposition;
 
+import android.graphics.Matrix;
 import android.graphics.Point;
 import android.util.Log;
 
@@ -17,10 +18,15 @@ public class MapPointer {
 	
 	private Point refPoint;
 	public Point point;
+	double azimuth_angle;
+    double pitch_angle;
+    double roll_angle;
+    Matrix position;
 	
 	public MapPointer() {
 		point = new Point(0,0);
 		refPoint = new Point(242,130);
+		position = new Matrix();
 		double d = computeMeterDistanceFromRef(refLat2,refLon2);
 		pixelPerMeter = D_REF_PT_PIXEL / d;
 		Log.d("IndoorDebug","pixelPerMeter:"+pixelPerMeter);
