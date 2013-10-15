@@ -39,9 +39,26 @@ public class MapSectionFragment extends Fragment{
 	private double longitude = 0;
 	private double bearing = 0;
 	
+	private float xAxis = 0;
+	private float yAxis = 0;
+	private float zAxis = 0;
+	
+	double x = 0;     // current position
+	double vx = 0;     // current velocity
+	double y = 0;     // current y position
+	double vy = 0;     // current y velocity
+	long lastTime = System.currentTimeMillis();      // previous time, nanoseconds
+	long newTime = 0;       // current time
+	float accelx = 0;
+	float accely = 0;
+	double timepassed = 0;
+	
 	private SensorManager mAccManager;
 	private Sensor mAccelerometer; 
 
+	private SensorManager mLinearManager;
+	private Sensor mLinear; 
+	
 	private SensorManager mMagManager;
 	private Sensor mMagnetic; 
 	
@@ -50,6 +67,7 @@ public class MapSectionFragment extends Fragment{
     double roll_angle;
     float geomagnetic[];
     float accValues[];
+    float linearValues[];
     boolean sensorReady;
 	
 	MapView map;
@@ -88,10 +106,13 @@ public class MapSectionFragment extends Fragment{
 	    mAccelerometer = mAccManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
 	    mAccManager.registerListener(sensorListener, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL); 
 		
+	    // linear accelerometer senor init
+	    mLinearManager = (SensorManager) this.getActivity().getSystemService(Context.SENSOR_SERVICE);
+	    mLinear = mLinearManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
+	    mLinearManager.registerListener(sensorListener, mLinear, SensorManager.SENSOR_DELAY_NORMAL); 
 		
 		// location manager init
-		locationManager = (LocationManager) this.getActivity().getSystemService(Context.LOCATION_SERVICE);
-		
+		locationManager = (LocationManager) this.getActivity().getSystemService(Context.LOCATION_SERVICE);	
 		locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
 		
 		// Create paint object
@@ -176,6 +197,7 @@ public class MapSectionFragment extends Fragment{
 	};
 	
 	protected SensorEventListener sensorListener = new SensorEventListener() {
+		
 
 		@Override
 		public void onAccuracyChanged(Sensor sensor, int accuracy) {
@@ -194,6 +216,8 @@ public class MapSectionFragment extends Fragment{
 		    		break;
 		    	case Sensor.TYPE_ACCELEROMETER:
 		        	accValues = event.values.clone();
+		    	case Sensor.TYPE_LINEAR_ACCELERATION:
+		    		linearValues = event.values.clone();
 		    }   
 
 		    if (geomagnetic != null && accValues != null && sensorReady) {
@@ -214,8 +238,23 @@ public class MapSectionFragment extends Fragment{
 				mtx.postTranslate(350, 550);
 				pointer.position.set(mtx);
 				
+				
 		    }
-		    map.postInvalidate();   
+		    if (linearValues != null) {
+		        accelx = linearValues[0] * 100 ;   // X axis is our axis of acceleration
+		        accely = linearValues[1] * 100 ;   // Y axis is our axis of acceleration
+		        newTime = event.timestamp;
+		        timepassed = (newTime - lastTime) * 0.000000001;
+		        vx += accelx * timepassed;
+		        x += vx * timepassed;
+		        vy += accely * timepassed;
+		        y += vy * timepassed;
+		        lastTime = newTime;
+		           
+		    }
+		    	
+		    map.postInvalidate();
+		    
 			
 		}  
 		
@@ -247,6 +286,12 @@ public class MapSectionFragment extends Fragment{
 		    canvas.drawText("azimuth: "+pointer.azimuth_angle, 0, 300, paint);
 		    canvas.drawText("Lat: "+latitude, 0, 600, paint);
 		    canvas.drawText("Long: "+longitude, 0, 700, paint);
+		    canvas.drawText("Velocity X:"+vx, 0, 400, paint);
+		    canvas.drawText("Position X: "+x, 0, 500, paint);
+		    canvas.drawText("Linear x: "+accelx, 0, 800, paint);
+		    canvas.drawText("Velovity Y: "+vy, 0, 200, paint);
+		    canvas.drawText("Position Y: "+y, 0, 100, paint);
+		    canvas.drawText("Linear y: "+accely, 0, 900, paint);
 		    //canvas.drawText("Bearing:"+bearing, 0, 800, paint);
 		}
 
