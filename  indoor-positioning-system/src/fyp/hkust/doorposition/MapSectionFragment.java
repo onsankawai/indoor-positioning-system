@@ -348,6 +348,7 @@ public class MapSectionFragment extends Fragment{
 			this.addView(getRefPointBtn);
 		}
 
+		// Set position of children, (left, top right bottom)
 		@Override
 		protected void onLayout(boolean changed, int l, int t, int r, int b) {
 			// TODO Auto-generated method stub
