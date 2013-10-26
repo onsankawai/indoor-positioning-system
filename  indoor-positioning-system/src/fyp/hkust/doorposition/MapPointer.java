@@ -24,7 +24,7 @@ public class MapPointer {
     Matrix position;
 	
 	public MapPointer() {
-		point = new Point(0,0);
+		point = new Point(350,550);
 		refPoint = new Point(242,130);
 		position = new Matrix();
 		double d = computeMeterDistanceFromRef(refLat2,refLon2);

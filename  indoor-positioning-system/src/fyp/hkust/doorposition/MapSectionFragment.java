@@ -23,6 +23,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.Button;
 
 public class MapSectionFragment extends Fragment{
 
@@ -71,6 +72,7 @@ public class MapSectionFragment extends Fragment{
     boolean sensorReady;
 	
 	MapView map;
+	MapViewGroup mapViewGroup;
 	MapPointer pointer;
 	Bitmap mapPic;
 	Bitmap pointerPic;
@@ -85,7 +87,7 @@ public class MapSectionFragment extends Fragment{
 
 
 	
-	
+	// Main create view
 	@Override
 	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		//View rootView = inflater.inflate(R.layout.map,container, false);
@@ -112,8 +114,8 @@ public class MapSectionFragment extends Fragment{
 	    mLinearManager.registerListener(sensorListener, mLinear, SensorManager.SENSOR_DELAY_NORMAL); 
 		
 		// location manager init
-		locationManager = (LocationManager) this.getActivity().getSystemService(Context.LOCATION_SERVICE);	
-		locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+		//locationManager = (LocationManager) this.getActivity().getSystemService(Context.LOCATION_SERVICE);	
+		//locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
 		
 		// Create paint object
 		paint = new Paint();
@@ -143,17 +145,18 @@ public class MapSectionFragment extends Fragment{
 		//pointerPic = Bitmap.createBitmap(bmp);
 		
 		map = new MapView(this.getActivity());
+		mapViewGroup = new MapViewGroup(this.getActivity(),map);
 		
 		// Create Pointer
 		pointer = new MapPointer();
 		pointer.computeCoordinate(pointer.refLat2, pointer.refLon2);
 		//pointerDisplayRect = new Rect(0,0,40,40);
 		
-		return map;
+		return mapViewGroup;
 		
 	}
 
-	
+	// GPS location sensor
 	protected LocationListener locationListener = new LocationListener() {
 
 		@Override
@@ -196,6 +199,7 @@ public class MapSectionFragment extends Fragment{
 		
 	};
 	
+	// Orientation, motion sensor
 	protected SensorEventListener sensorListener = new SensorEventListener() {
 		
 
@@ -235,9 +239,11 @@ public class MapSectionFragment extends Fragment{
 	    	  	// set rotation and x,y-translation
 			    Matrix mtx = new Matrix();
 				mtx.postRotate((float) pointer.azimuth_angle - 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
-				mtx.postTranslate(350, 550);
+				mtx.postTranslate(pointer.point.x, pointer.point.y);
+				mtx.postTranslate(-pointerPic.getWidth()/2, -pointerPic.getHeight()/2);
 				pointer.position.set(mtx);
-				
+				//pointer.position.setRotate((float) pointer.azimuth_angle - 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
+				//pointer.position.postTranslate(pointer.point.x, pointer.point.y);
 				
 		    }
 		    if (linearValues != null) {
@@ -261,13 +267,15 @@ public class MapSectionFragment extends Fragment{
 	};
 	
 
-	
+	// Map view
 	class MapView extends View
 	{
 
 		public MapView(Context context) {
 			super(context);
 			// TODO Auto-generated constructor stub
+
+			
 		}
 		
 		
@@ -300,6 +308,56 @@ public class MapSectionFragment extends Fragment{
 			
 		}
 		
+		public void getRefPoint() {
+			pointer.point.x = 380;
+			pointer.point.y = 240;
+			this.invalidate();
+		}
+
 	}
+	
+	class MapViewGroup extends ViewGroup 
+	{
+		MapView map;
+		Button getRefPointBtn;
+
+		public MapViewGroup(Context context, MapView mapView) {
+			super(context);
+			// TODO Auto-generated constructor stub
+			// Get map vieww 
+			map = mapView;
+			
+			// Ref Point Btn
+			getRefPointBtn = new Button(context);
+			getRefPointBtn.setHeight(100);
+			getRefPointBtn.setWidth(200);
+			getRefPointBtn.setText("Get Ref");
+			getRefPointBtn.setLayoutParams(new LayoutParams(LayoutParams.WRAP_CONTENT, 
+                    LayoutParams.WRAP_CONTENT));
+			getRefPointBtn.setOnClickListener(new OnClickListener() {
+
+				@Override
+				public void onClick(View arg0) {
+					// TODO Auto-generated method stub
+					map.getRefPoint();
+				}
+				
+			});
+			
+			this.addView(map);
+			this.addView(getRefPointBtn);
+		}
+
+		@Override
+		protected void onLayout(boolean changed, int l, int t, int r, int b) {
+			// TODO Auto-generated method stub
+			
+			map.layout(l, t, r, b);
+			getRefPointBtn.layout(l, t, r/6, b/6);
+			
+		}
+		
+	}
+	
 
 }
