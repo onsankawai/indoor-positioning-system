@@ -29,6 +29,7 @@ public class MapSectionFragment extends Fragment{
 
 	private static final int MAP_X_MAX = 800;
 	private static final int MAP_Y_MAX = 600;
+	private final float kFilteringFactor = 0.8f;
 	private int mapWidth = 0;
 	private int mapHeight = 0;
 	private int x_coor = 0;
@@ -44,6 +45,10 @@ public class MapSectionFragment extends Fragment{
 	private float yAxis = 0;
 	private float zAxis = 0;
 	
+	private float xNoise = 0;
+	private float yNoise = 0;
+
+	
 	double x = 0;     // current position
 	double vx = 0;     // current velocity
 	double y = 0;     // current y position
@@ -52,6 +57,15 @@ public class MapSectionFragment extends Fragment{
 	long newTime = 0;       // current time
 	float accelx = 0;
 	float accely = 0;
+	float accelz = 0;
+	float preAccelx = 0;
+	float preAccely = 0;
+	float preAccelz = 0;
+	float resultAccelx = 0;
+	float resultAccely = 0;
+	float resultAccelz = 0;
+	float filteredx = 0;
+	float filteredy = 0;
 	double timepassed = 0;
 	
 	private SensorManager mAccManager;
@@ -155,6 +169,8 @@ public class MapSectionFragment extends Fragment{
 		return mapViewGroup;
 		
 	}
+	
+	
 
 	// GPS location sensor
 	protected LocationListener locationListener = new LocationListener() {
@@ -249,6 +265,31 @@ public class MapSectionFragment extends Fragment{
 		    if (linearValues != null) {
 		        accelx = linearValues[0] * 100 ;   // X axis is our axis of acceleration
 		        accely = linearValues[1] * 100 ;   // Y axis is our axis of acceleration
+		        accelz = linearValues[2] * 100 ;   // Y axis is our axis of acceleration
+		    /*    preAccelx = accelx * kFilteringFactor + preAccelx * (1.0f - kFilteringFactor); 
+		        preAccely = accely * kFilteringFactor + preAccely * (1.0f - kFilteringFactor);
+		        resultAccelx = accelx - preAccelx;
+		        resultAccely = accely - preAccely;   */
+		        float updateFreq = 30; // match this to your update speed
+		        float cutOffFreq = 0.9f;
+		        float RC = 1.0f / cutOffFreq;
+		        float dt = 1.0f / updateFreq;
+		        float filterConstant = RC / (dt + RC);
+		        float alpha = filterConstant; 
+		        float kAccelerometerMinStep = 0.033f;
+		        float kAccelerometerNoiseAttenuation = 3.0f;
+	            float d = clamp(Math.abs(norm(preAccelx, preAccely, preAccelz) - norm(accelx, accely, accelz)) 
+	            		/ kAccelerometerMinStep - 1.0f, 0.0f, 1.0f);
+	            alpha = d * filterConstant / kAccelerometerNoiseAttenuation + (1.0f - d) * filterConstant;
+	        
+
+		        preAccelx = (float) (alpha * (preAccelx + accelx - resultAccelx));
+		        preAccely = (float) (alpha * (preAccely + accely - resultAccely));
+		        preAccelz = (float) (alpha * (preAccelz + accelz - resultAccelz));
+
+		        resultAccelx = accelx;
+		        resultAccely = accely;
+		        resultAccelz = accelz;
 		        newTime = event.timestamp;
 		        timepassed = (newTime - lastTime) * 0.000000001;
 		        vx += accelx * timepassed;
@@ -266,7 +307,21 @@ public class MapSectionFragment extends Fragment{
 		
 	};
 	
+	private float norm(float a, float b, float c) {
+		return (float) Math.sqrt(a*a+b*b+c*c);
+	}
+	
+	private float clamp(float i, float low, float high) {
+		return Math.max(Math.min(i, low), high);
+	}
+	
 
+	private void calibration() {
+		xNoise = accelx;
+		yNoise = accely;
+		filteredx = preAccelx;
+		filteredy = preAccely;
+	}
 	// Map view
 	class MapView extends View
 	{
@@ -294,12 +349,14 @@ public class MapSectionFragment extends Fragment{
 		    canvas.drawText("azimuth: "+pointer.azimuth_angle, 0, 300, paint);
 		    canvas.drawText("Lat: "+latitude, 0, 600, paint);
 		    canvas.drawText("Long: "+longitude, 0, 700, paint);
-		    canvas.drawText("Velocity X:"+vx, 0, 400, paint);
-		    canvas.drawText("Position X: "+x, 0, 500, paint);
-		    canvas.drawText("Linear x: "+accelx, 0, 800, paint);
+		    canvas.drawText("X noise: "+xNoise, 0, 400, paint);
+		    canvas.drawText("Y noise: "+yNoise, 0, 500, paint);
+		    canvas.drawText("X accel: "+filteredx, 0, 800, paint);
+		    canvas.drawText("Y accel: "+filteredy, 0, 900, paint);
+		/*    canvas.drawText("Linear x: "+accelx, 0, 800, paint);
 		    canvas.drawText("Velovity Y: "+vy, 0, 200, paint);
 		    canvas.drawText("Position Y: "+y, 0, 100, paint);
-		    canvas.drawText("Linear y: "+accely, 0, 900, paint);
+		    canvas.drawText("Linear y: "+accely, 0, 900, paint); */
 		    //canvas.drawText("Bearing:"+bearing, 0, 800, paint);
 		}
 
@@ -320,6 +377,7 @@ public class MapSectionFragment extends Fragment{
 	{
 		MapView map;
 		Button getRefPointBtn;
+		Button calibrateBtn;
 
 		public MapViewGroup(Context context, MapView mapView) {
 			super(context);
@@ -344,8 +402,26 @@ public class MapSectionFragment extends Fragment{
 				
 			});
 			
+			// Calibrate Button
+			calibrateBtn = new Button(context);
+			calibrateBtn.setHeight(80);
+			calibrateBtn.setWidth(100);
+			calibrateBtn.setText("Start");
+			calibrateBtn.setLayoutParams(new LayoutParams(LayoutParams.WRAP_CONTENT,
+					LayoutParams.WRAP_CONTENT));
+			calibrateBtn.setOnClickListener(new OnClickListener() {
+
+				@Override
+				public void onClick(View arg0) {
+					// TODO Auto-generated method stub
+					calibration();
+				}
+				
+			});
+			
 			this.addView(map);
 			this.addView(getRefPointBtn);
+			this.addView(calibrateBtn);
 		}
 
 		// Set position of children, (left, top right bottom)
@@ -355,6 +431,7 @@ public class MapSectionFragment extends Fragment{
 			
 			map.layout(l, t, r, b);
 			getRefPointBtn.layout(l, t, r/6, b/6);
+			calibrateBtn.layout(l+500, t+850, r, b);
 			
 		}
 		
