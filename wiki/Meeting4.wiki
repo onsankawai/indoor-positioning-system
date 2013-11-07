@@ -1,0 +1,12 @@
+# 4th Meeting 7 NOV 2013Fall
+
+= Introduction =
+  # Progress monitoring
+  # Decided to use Pedometer for distance calculation
+  # Integrate Pedometer + Magnetometer for a complete Navigation System 
+  # Decided to use ITSC's iHome for application server implementation
+  # Next meeting scheduled to 18th Nov
+
+= Details =
+  * Pedometer implementation in Android app (Tracey)
+  * Application Server + database implementation using ITSC's iHome (PHP + MySQL) (David)
