@@ -1,0 +1,10 @@
+# 5th Meeting 5 FEB 2013Spring
+
+= Introduction =
+  # Progress monitoring
+  # Pedometer 
+  # Application Server
+
+= Details =
+  * 2 weeks for Pedometer implementation in Android app (Tracey)
+  * 2 weeks for Application Server + database + phone connection(David)
