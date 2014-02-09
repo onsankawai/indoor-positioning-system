@@ -32,6 +32,19 @@ public class MapPointer {
 		Log.d("IndoorDebug","pixelPerMeter:"+pixelPerMeter);
 	}
 	
+	protected void computePedometer(double x, double y) {
+		double pixelDistx = x * pixelPerMeter;
+		double pixelDisty = y * pixelPerMeter;
+		Log.d("IndoorDebug","pixelDist:"+pixelDistx+pixelDisty);
+		
+		point.x = (int) (point.x + pixelDistx);
+		point.y = (int) (point.y - pixelDisty);
+		Log.d("IndoorDebug","x:"+point.x);
+		Log.d("IndoorDebug","y:"+point.y);
+		//Log.d("IndoorDebug","bearing:"+bearing);
+		
+	}
+	
 	protected void computeCoordinate(double lat, double lon) {
 		double d = computeMeterDistanceFromRef(lat,lon);
 		double pixelDist = d * pixelPerMeter;

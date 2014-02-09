@@ -2,6 +2,7 @@ package fyp.hkust.doorposition;
 
 import android.support.v4.app.Fragment;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -17,6 +18,8 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 import android.view.Display;
 import android.view.LayoutInflater;
@@ -36,17 +39,21 @@ public class MapSectionFragment extends Fragment{
 	private int y_coor = 0;
 	private float accuracy = 0;
 	
-	
+	private float[] actual_orientation = new float[3];
+	private int mSteps;
+	private final double stepSize = 0.7;
+	private double xmoved = 0;
+	private double ymoved = 0;
 	private double latitude = 0;
 	private double longitude = 0;
 	private double bearing = 0;
 	
-	private float xAxis = 0;
+/*	private float xAxis = 0;
 	private float yAxis = 0;
 	private float zAxis = 0;
 	
 	private float xNoise = 0;
-	private float yNoise = 0;
+	private float yNoise = 0;   */
 
 	
 	double x = 0;     // current position
@@ -75,8 +82,14 @@ public class MapSectionFragment extends Fragment{
 	private Sensor mLinear; 
 	
 	private SensorManager mMagManager;
-	private Sensor mMagnetic; 
+	private Sensor mMagnetic;
 	
+	private SensorManager mSensorManager;
+    private Sensor mSensor;
+    private StepDetector mStepDetector;
+    
+    private StepDisplayer mStepDisplayer;
+    
 	double azimuth_angle;
     double pitch_angle;
     double roll_angle;
@@ -130,7 +143,18 @@ public class MapSectionFragment extends Fragment{
 		// location manager init
 		//locationManager = (LocationManager) this.getActivity().getSystemService(Context.LOCATION_SERVICE);	
 		//locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
-		
+	    
+	    // Step Detector init
+	    mSensorManager = (SensorManager) this.getActivity().getSystemService(Context.SENSOR_SERVICE);
+	    mStepDetector = new StepDetector();
+	    registerDetector();
+	    
+	    // Step Displayer Init
+	    mStepDisplayer = new StepDisplayer();
+        mStepDisplayer.setSteps(0);
+        mStepDisplayer.addListener(mStepListener);
+        mStepDetector.addStepListener(mStepDisplayer);
+    
 		// Create paint object
 		paint = new Paint();
 		
@@ -170,7 +194,41 @@ public class MapSectionFragment extends Fragment{
 		
 	}
 	
-	
+    private void registerDetector() {
+        mSensor = mSensorManager.getDefaultSensor(
+            Sensor.TYPE_ACCELEROMETER /*| 
+            Sensor.TYPE_MAGNETIC_FIELD | 
+            Sensor.TYPE_ORIENTATION*/);
+        mSensorManager.registerListener(mStepDetector,
+            mSensor,
+            SensorManager.SENSOR_DELAY_FASTEST);
+    }
+    
+      
+    private StepDisplayer.Listener mStepListener = new StepDisplayer.Listener() {
+        public void stepsChanged(int value) {
+        		mSteps = value;
+
+	            // Calculate distance moved
+	    	  	//  distance += stepSize;
+               xmoved = stepSize * Math.cos(-actual_orientation[0]);
+               ymoved = stepSize * Math.sin(-actual_orientation[0]);
+               pointer.computePedometer(xmoved, ymoved);
+               
+	    	  	// set rotation and x,y-translation
+			    Matrix mtx = new Matrix();
+				mtx.postRotate((float) pointer.azimuth_angle - 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
+				mtx.postTranslate(pointer.point.x, pointer.point.y);
+				mtx.postTranslate(-pointerPic.getWidth()/2, -pointerPic.getHeight()/2);
+				pointer.position.set(mtx);
+				//pointer.position.setRotate((float) pointer.azimuth_angle - 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
+				//pointer.position.postTranslate(pointer.point.x, pointer.point.y);
+				
+		    }
+            
+            
+        
+    };	
 
 	// GPS location sensor
 	protected LocationListener locationListener = new LocationListener() {
@@ -248,9 +306,10 @@ public class MapSectionFragment extends Fragment{
 
 		        SensorManager.getRotationMatrix(R, I, accValues, geomagnetic);
 
-		        float[] actual_orientation = new float[3];
+		        
 		        SensorManager.getOrientation(R, actual_orientation);
 	    	  	pointer.azimuth_angle = (360 + Math.toDegrees(actual_orientation[0])) % 360;
+	    	  	
 	    	  	
 	    	  	// set rotation and x,y-translation
 			    Matrix mtx = new Matrix();
@@ -262,7 +321,7 @@ public class MapSectionFragment extends Fragment{
 				//pointer.position.postTranslate(pointer.point.x, pointer.point.y);
 				
 		    }
-		    if (linearValues != null) {
+	/*	    if (linearValues != null) {
 		        accelx = linearValues[0] * 100 ;   // X axis is our axis of acceleration
 		        accely = linearValues[1] * 100 ;   // Y axis is our axis of acceleration
 		        accelz = linearValues[2] * 100 ;   // Y axis is our axis of acceleration
@@ -270,7 +329,7 @@ public class MapSectionFragment extends Fragment{
 		        preAccely = accely * kFilteringFactor + preAccely * (1.0f - kFilteringFactor);
 		        resultAccelx = accelx - preAccelx;
 		        resultAccely = accely - preAccely;   */
-		        float updateFreq = 30; // match this to your update speed
+/*		        float updateFreq = 30; // match this to your update speed
 		        float cutOffFreq = 0.9f;
 		        float RC = 1.0f / cutOffFreq;
 		        float dt = 1.0f / updateFreq;
@@ -298,7 +357,7 @@ public class MapSectionFragment extends Fragment{
 		        y += vy * timepassed;
 		        lastTime = newTime;
 		           
-		    }
+		    } */
 		    	
 		    map.postInvalidate();
 		    
@@ -316,12 +375,12 @@ public class MapSectionFragment extends Fragment{
 	}
 	
 
-	private void calibration() {
+/*	private void calibration() {
 		xNoise = accelx;
 		yNoise = accely;
 		filteredx = preAccelx;
 		filteredy = preAccely;
-	}
+	}  */
 	// Map view
 	class MapView extends View
 	{
@@ -347,12 +406,16 @@ public class MapSectionFragment extends Fragment{
 		    canvas.drawCircle(380, 240, 6, paint);
 		    canvas.drawCircle(516, 240, 6, paint);
 		    canvas.drawText("azimuth: "+pointer.azimuth_angle, 0, 300, paint);
-		    canvas.drawText("Lat: "+latitude, 0, 600, paint);
+		    canvas.drawText("Step: "+mSteps, 0, 600, paint);
+		    canvas.drawText("x: "+xmoved, 0, 700, paint);
+		    canvas.drawText("y: "+ymoved, 0, 400, paint);
+		    canvas.drawText("radian;"+actual_orientation[0], 0, 500, paint);
+		/*    canvas.drawText("Lat: "+latitude, 0, 600, paint);
 		    canvas.drawText("Long: "+longitude, 0, 700, paint);
 		    canvas.drawText("X noise: "+xNoise, 0, 400, paint);
 		    canvas.drawText("Y noise: "+yNoise, 0, 500, paint);
 		    canvas.drawText("X accel: "+filteredx, 0, 800, paint);
-		    canvas.drawText("Y accel: "+filteredy, 0, 900, paint);
+		    canvas.drawText("Y accel: "+filteredy, 0, 900, paint);   */
 		/*    canvas.drawText("Linear x: "+accelx, 0, 800, paint);
 		    canvas.drawText("Velovity Y: "+vy, 0, 200, paint);
 		    canvas.drawText("Position Y: "+y, 0, 100, paint);
@@ -377,7 +440,7 @@ public class MapSectionFragment extends Fragment{
 	{
 		MapView map;
 		Button getRefPointBtn;
-		Button calibrateBtn;
+	//	Button calibrateBtn;
 
 		public MapViewGroup(Context context, MapView mapView) {
 			super(context);
@@ -403,7 +466,7 @@ public class MapSectionFragment extends Fragment{
 			});
 			
 			// Calibrate Button
-			calibrateBtn = new Button(context);
+	/*		calibrateBtn = new Button(context);
 			calibrateBtn.setHeight(80);
 			calibrateBtn.setWidth(100);
 			calibrateBtn.setText("Start");
@@ -417,11 +480,11 @@ public class MapSectionFragment extends Fragment{
 					calibration();
 				}
 				
-			});
+			});  */
 			
 			this.addView(map);
 			this.addView(getRefPointBtn);
-			this.addView(calibrateBtn);
+	//		this.addView(calibrateBtn);
 		}
 
 		// Set position of children, (left, top right bottom)
@@ -431,7 +494,7 @@ public class MapSectionFragment extends Fragment{
 			
 			map.layout(l, t, r, b);
 			getRefPointBtn.layout(l, t, r/6, b/6);
-			calibrateBtn.layout(l+500, t+850, r, b);
+		//	calibrateBtn.layout(l+500, t+850, r, b);
 			
 		}
 		
