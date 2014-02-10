@@ -1,8 +1,18 @@
 package fyp.hkust.doorposition;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.StatusLine;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
+
 import android.support.v4.app.Fragment;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -17,9 +27,8 @@ import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
 import android.util.Log;
 import android.view.Display;
 import android.view.LayoutInflater;
@@ -30,13 +39,8 @@ import android.widget.Button;
 
 public class MapSectionFragment extends Fragment{
 
-	private static final int MAP_X_MAX = 800;
-	private static final int MAP_Y_MAX = 600;
-	private final float kFilteringFactor = 0.8f;
 	private int mapWidth = 0;
 	private int mapHeight = 0;
-	private int x_coor = 0;
-	private int y_coor = 0;
 	private float accuracy = 0;
 	
 	private float[] actual_orientation = new float[3];
@@ -46,15 +50,6 @@ public class MapSectionFragment extends Fragment{
 	private double ymoved = 0;
 	private double latitude = 0;
 	private double longitude = 0;
-	private double bearing = 0;
-	
-/*	private float xAxis = 0;
-	private float yAxis = 0;
-	private float zAxis = 0;
-	
-	private float xNoise = 0;
-	private float yNoise = 0;   */
-
 	
 	double x = 0;     // current position
 	double vx = 0;     // current velocity
@@ -97,7 +92,8 @@ public class MapSectionFragment extends Fragment{
     float accValues[];
     float linearValues[];
     boolean sensorReady;
-	
+	int gridSize;
+    
 	MapView map;
 	MapViewGroup mapViewGroup;
 	MapPointer pointer;
@@ -117,18 +113,54 @@ public class MapSectionFragment extends Fragment{
 	// Main create view
 	@Override
 	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-		//View rootView = inflater.inflate(R.layout.map,container, false);
-
+	
+		// init sensors, pedometers
+		initSensors();
 		
-		//TextView titleTextView = (TextView) rootView.findViewById(R.id.view_map_title);
-		//titleTextView.setText(Integer.toString(getArguments().getInt(ARG_SECTION_NUMBER)));
-		//titleTextView.setText(R.string.title_map);
-		//titleTextView.setTextColor(getResources().getColor(R.color.light_grey));
-
-		// magnetic field sensor init
+		// init screen grids
+		initScreenGrid();
+		
+		// Create paint object
+		paint = new Paint();
+		
+		mapDisplayRect = new Rect(0,0,mapWidth,mapHeight);
+		// Create bitmap - MAP
+		Bitmap bmp = BitmapFactory.decodeResource(getResources(), R.drawable.atrium_map);
+		mapPic = Bitmap.createBitmap(bmp);
+		
+		ptrDisplayRect = new Rect(350, 550, 400, 600); 
+		// Create bitmap - pointer
+		bmp = BitmapFactory.decodeResource(getResources(), R.drawable.pointer);
+		pointerPic = Bitmap.createScaledBitmap(bmp, 40, 40,true);
+		//pointerPic = Bitmap.createBitmap(bmp);
+		
+		map = new MapView(this.getActivity());
+		mapViewGroup = new MapViewGroup(this.getActivity(),map);
+		
+		// Create Pointer
+		pointer = new MapPointer(gridSize);
+		pointer.computeCoordinate(pointer.refLat2, pointer.refLon2);
+		//pointerDisplayRect = new Rect(0,0,40,40);
+		
+		return mapViewGroup;
+		
+	}
+	
+    private void registerDetector() {
+        mSensor = mSensorManager.getDefaultSensor(
+            Sensor.TYPE_ACCELEROMETER /*| 
+            Sensor.TYPE_MAGNETIC_FIELD | 
+            Sensor.TYPE_ORIENTATION*/);
+        mSensorManager.registerListener(mStepDetector,
+            mSensor,
+            SensorManager.SENSOR_DELAY_FASTEST);
+    }
+    
+    private void initSensors() {
+    	// magnetic field sensor init
 		mMagManager = (SensorManager) this.getActivity().getSystemService(Context.SENSOR_SERVICE);
 	    mMagnetic = mMagManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
-	    mMagManager.registerListener(sensorListener, mMagnetic, SensorManager.SENSOR_DELAY_NORMAL);
+	    mMagManager.registerListener(sensorListener, mMagnetic, SensorManager.SENSOR_DELAY_GAME);
 		
 		// accelerometer sensor init
 		mAccManager = (SensorManager) this.getActivity().getSystemService(Context.SENSOR_SERVICE);
@@ -154,11 +186,11 @@ public class MapSectionFragment extends Fragment{
         mStepDisplayer.setSteps(0);
         mStepDisplayer.addListener(mStepListener);
         mStepDetector.addStepListener(mStepDisplayer);
-    
-		// Create paint object
-		paint = new Paint();
-		
-		// Get display region
+    }
+      
+    // 768 * 1024 for Nexus 4, 32*32 gridSize
+    private void initScreenGrid() {
+    	// Get display region
 		WindowManager wm = (WindowManager) this.getActivity().getSystemService(Context.WINDOW_SERVICE);
 		Display display = wm.getDefaultDisplay();
 		Point size = new Point();
@@ -169,42 +201,12 @@ public class MapSectionFragment extends Fragment{
 		Log.d("IndoorDebug", "Width:" + width);
 		Log.d("IndoorDebug", "Height:" + height);
 		mapWidth = width;
-		mapHeight = height-242;
+		mapHeight = height-160;
 		
-		mapDisplayRect = new Rect(0,0,mapWidth,mapHeight);
-		// Create bitmap - MAP
-		Bitmap bmp = BitmapFactory.decodeResource(getResources(), R.drawable.atrium_map);
-		mapPic = Bitmap.createBitmap(bmp);
-		
-		ptrDisplayRect = new Rect(350, 550, 400, 600); 
-		// Create bitmap - pointer
-		bmp = BitmapFactory.decodeResource(getResources(), R.drawable.pointer);
-		pointerPic = Bitmap.createScaledBitmap(bmp, 40, 40,true);
-		//pointerPic = Bitmap.createBitmap(bmp);
-		
-		map = new MapView(this.getActivity());
-		mapViewGroup = new MapViewGroup(this.getActivity(),map);
-		
-		// Create Pointer
-		pointer = new MapPointer();
-		pointer.computeCoordinate(pointer.refLat2, pointer.refLon2);
-		//pointerDisplayRect = new Rect(0,0,40,40);
-		
-		return mapViewGroup;
-		
-	}
-	
-    private void registerDetector() {
-        mSensor = mSensorManager.getDefaultSensor(
-            Sensor.TYPE_ACCELEROMETER /*| 
-            Sensor.TYPE_MAGNETIC_FIELD | 
-            Sensor.TYPE_ORIENTATION*/);
-        mSensorManager.registerListener(mStepDetector,
-            mSensor,
-            SensorManager.SENSOR_DELAY_FASTEST);
+		// 32*32 sq. pixel for N4 phone screen and 768 * 1024 map, 24 * 32 grids
+		gridSize = 32;
     }
     
-      
     private StepDisplayer.Listener mStepListener = new StepDisplayer.Listener() {
         public void stepsChanged(int value) {
         		mSteps = value;
@@ -245,10 +247,6 @@ public class MapSectionFragment extends Fragment{
 				
 				//bearing = location.getBearing();
 				pointer.computeCoordinate(latitude, longitude);
-				x_coor = pointer.point.x;
-				y_coor = pointer.point.y;
-			//	pointerDisplayRect = new Rect(x_coor-20,y_coor-20,x_coor+20,y_coor+20);
-				//map.postInvalidate();
 			}
 			map.postInvalidate();
 		}
@@ -366,16 +364,7 @@ public class MapSectionFragment extends Fragment{
 		
 	};
 	
-	private float norm(float a, float b, float c) {
-		return (float) Math.sqrt(a*a+b*b+c*c);
-	}
-	
-	private float clamp(float i, float low, float high) {
-		return Math.max(Math.min(i, low), high);
-	}
-	
-
-/*	private void calibration() {
+	/*	private void calibration() {
 		xNoise = accelx;
 		yNoise = accely;
 		filteredx = preAccelx;
@@ -384,43 +373,38 @@ public class MapSectionFragment extends Fragment{
 	// Map view
 	class MapView extends View
 	{
+		Paint gridPaint;
 
 		public MapView(Context context) {
 			super(context);
 			// TODO Auto-generated constructor stub
-
-			
+			gridPaint = new Paint();
+			gridPaint.setColor(getResources().getColor(R.color.light_grey));
+			gridPaint.setAlpha(127);
+			gridPaint.setStyle(Paint.Style.FILL);
 		}
 		
 		
 		@Override
 		protected void onDraw(Canvas canvas){
+			
 			canvas.drawBitmap(mapPic, null, mapDisplayRect, paint);
-			//pointerPic = Bitmap.createBitmap(bmp2, 0, 0, bmp2.getWidth(), bmp2.getHeight(), mtx, true);
+			drawGrid(canvas);
 			canvas.drawBitmap(pointerPic, pointer.position, paint);
-		//	canvas.drawBitmap(pointerPic, mtx, paint);
-			//canvas.drawColor(R.color.red);
+
 			paint.setColor(getResources().getColor(R.color.red));
 			paint.setTextSize(40);
 		    //canvas.drawCircle(380, 84, 6, paint);
-		    canvas.drawCircle(380, 240, 6, paint);
-		    canvas.drawCircle(516, 240, 6, paint);
+		    canvas.drawCircle(380, 256, 6, paint);
+		    canvas.drawCircle(516, 256, 6, paint);
 		    canvas.drawText("azimuth: "+pointer.azimuth_angle, 0, 300, paint);
 		    canvas.drawText("Step: "+mSteps, 0, 600, paint);
-		    canvas.drawText("x: "+xmoved, 0, 700, paint);
-		    canvas.drawText("y: "+ymoved, 0, 400, paint);
+		    //canvas.drawText("x: "+xmoved, 0, 700, paint);
+		    //canvas.drawText("y: "+ymoved, 0, 400, paint);
+		    canvas.drawText("x: "+pointer.gridPoint.x, 0, 700, paint);
+		    canvas.drawText("y: "+pointer.gridPoint.y, 0, 400, paint);
 		    canvas.drawText("radian;"+actual_orientation[0], 0, 500, paint);
-		/*    canvas.drawText("Lat: "+latitude, 0, 600, paint);
-		    canvas.drawText("Long: "+longitude, 0, 700, paint);
-		    canvas.drawText("X noise: "+xNoise, 0, 400, paint);
-		    canvas.drawText("Y noise: "+yNoise, 0, 500, paint);
-		    canvas.drawText("X accel: "+filteredx, 0, 800, paint);
-		    canvas.drawText("Y accel: "+filteredy, 0, 900, paint);   */
-		/*    canvas.drawText("Linear x: "+accelx, 0, 800, paint);
-		    canvas.drawText("Velovity Y: "+vy, 0, 200, paint);
-		    canvas.drawText("Position Y: "+y, 0, 100, paint);
-		    canvas.drawText("Linear y: "+accely, 0, 900, paint); */
-		    //canvas.drawText("Bearing:"+bearing, 0, 800, paint);
+
 		}
 
 		public void handleScroll(float distanceX, float distanceY) {
@@ -428,9 +412,27 @@ public class MapSectionFragment extends Fragment{
 			
 		}
 		
+		private void drawGrid(Canvas canvas) {
+			int horiGrids = 768/gridSize;
+			int vertGrids = 1024/gridSize;
+			for(int i = 1; i < horiGrids; i++) {
+				canvas.drawLine(i*gridSize, 0, i*gridSize, 1024, gridPaint);
+			}
+			for(int j = 1; j < vertGrids; j++) {
+				canvas.drawLine(0, j*gridSize, 768, j*gridSize, gridPaint);
+			}
+			// highlight the current grid
+			int gridPosX = pointer.gridPoint.x * gridSize;
+			int gridPosY = pointer.gridPoint.y * gridSize;
+			canvas.drawRect(gridPosX, 
+							gridPosY, 
+							gridPosX + gridSize, 
+							gridPosY + gridSize, 
+							gridPaint);
+		}
+		
 		public void getRefPoint() {
-			pointer.point.x = 380;
-			pointer.point.y = 240;
+			pointer.setPoint(380, 256);
 			this.invalidate();
 		}
 
@@ -498,6 +500,41 @@ public class MapSectionFragment extends Fragment{
 			
 		}
 		
+	}
+	
+	class HTTPRequestTask extends AsyncTask<String, String, String>{
+
+	    @Override
+	    protected String doInBackground(String... uri) {
+	        HttpClient httpclient = new DefaultHttpClient();
+	        HttpResponse response;
+	        String responseString = null;
+	        try {
+	            response = httpclient.execute(new HttpGet(uri[0]));
+	            StatusLine statusLine = response.getStatusLine();
+	            if(statusLine.getStatusCode() == HttpStatus.SC_OK){
+	                ByteArrayOutputStream out = new ByteArrayOutputStream();
+	                response.getEntity().writeTo(out);
+	                out.close();
+	                responseString = out.toString();
+	            } else{
+	                //Closes the connection.
+	                response.getEntity().getContent().close();
+	                throw new IOException(statusLine.getReasonPhrase());
+	            }
+	        } catch (ClientProtocolException e) {
+	            //TODO Handle problems..
+	        } catch (IOException e) {
+	            //TODO Handle problems..
+	        }
+	        return responseString;
+	    }
+
+	    @Override
+	    protected void onPostExecute(String result) {
+	        super.onPostExecute(result);
+	        //Do anything with response..
+	    }
 	}
 	
 

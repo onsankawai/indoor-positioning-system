@@ -18,18 +18,29 @@ public class MapPointer {
 	
 	private Point refPoint;
 	public Point point;
+	public Point gridPoint;
 	double azimuth_angle;
     double pitch_angle;
     double roll_angle;
+    int gridSize;
     Matrix position;
 	
-	public MapPointer() {
+	public MapPointer(int gridSize) {
 		point = new Point(350,550);
+		gridPoint = new Point(350/gridSize, 550/gridSize);
 		refPoint = new Point(242,130);
 		position = new Matrix();
 		double d = computeMeterDistanceFromRef(refLat2,refLon2);
 		pixelPerMeter = D_REF_PT_PIXEL / d;
 		Log.d("IndoorDebug","pixelPerMeter:"+pixelPerMeter);
+		this.gridSize = gridSize;
+	}
+	
+	protected void setPoint(int x, int y) {
+		this.point.x = x;
+		this.point.y = y;
+		this.gridPoint.x = x/gridSize;
+		this.gridPoint.y = y/gridSize;
 	}
 	
 	protected void computePedometer(double x, double y) {
@@ -37,10 +48,11 @@ public class MapPointer {
 		double pixelDisty = y * pixelPerMeter;
 		Log.d("IndoorDebug","pixelDist:"+pixelDistx+pixelDisty);
 		
-		point.x = (int) (point.x + pixelDistx);
-		point.y = (int) (point.y - pixelDisty);
-		Log.d("IndoorDebug","x:"+point.x);
-		Log.d("IndoorDebug","y:"+point.y);
+		setPoint((int) (point.x + pixelDistx),  (int) (point.y - pixelDisty));
+		//point.x = (int) (point.x + pixelDistx);
+		//point.y = (int) (point.y - pixelDisty);
+		Log.d("IndoorDebug","gridx:"+gridPoint.x);
+		Log.d("IndoorDebug","gridy:"+gridPoint.y);
 		//Log.d("IndoorDebug","bearing:"+bearing);
 		
 	}
@@ -78,7 +90,6 @@ public class MapPointer {
 	protected double computeAdjustedBearingFromRef(double lat, double lon) {
 		lat = Math.toRadians(lat);
 		lon = Math.toRadians(lon);
-		double dLat = lat - refLat1;
 		double dLon = lon - refLon1;
 		double y = Math.sin(dLon) * Math.cos(lat);
 		double x = Math.cos(refLat1)*Math.sin(lat) -
