@@ -2,6 +2,8 @@ package fyp.hkust.doorposition;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -69,6 +71,13 @@ public class MapSectionFragment extends Fragment{
 	float filteredx = 0;
 	float filteredy = 0;
 	double timepassed = 0;
+	
+	float[] mRotationMatrix = new float[16];
+	private List<float[]> mAzHist = new ArrayList<float[]>();
+	private int mAzHistIndex;
+	private int mHistoryMaxLength = 50;
+	private float mAz = Float.NaN;
+	private double withoutmedian;
 	
 	private SensorManager mAccManager;
 	private Sensor mAccelerometer; 
@@ -213,8 +222,8 @@ public class MapSectionFragment extends Fragment{
 
 	            // Calculate distance moved
 	    	  	//  distance += stepSize;
-               xmoved = stepSize * Math.cos(-actual_orientation[0]);
-               ymoved = stepSize * Math.sin(-actual_orientation[0]);
+               xmoved = stepSize * Math.cos(-mAz);
+               ymoved = stepSize * Math.sin(-mAz);
                pointer.computePedometer(xmoved, ymoved);
                
 	    	  	// set rotation and x,y-translation
@@ -299,14 +308,15 @@ public class MapSectionFragment extends Fragment{
 		    if (geomagnetic != null && accValues != null && sensorReady) {
 		        sensorReady = false;
 
-		        float[] R = new float[16];
+		        
 		        float[] I = new float[16];
 
-		        SensorManager.getRotationMatrix(R, I, accValues, geomagnetic);
-
-		        
-		        SensorManager.getOrientation(R, actual_orientation);
-	    	  	pointer.azimuth_angle = (360 + Math.toDegrees(actual_orientation[0])) % 360;
+		        SensorManager.getRotationMatrix(mRotationMatrix, I, accValues, geomagnetic);		        
+		        SensorManager.getOrientation(mRotationMatrix, actual_orientation);
+		        setAzHist();
+    			mAz = median(mAzHist);
+	    	  	pointer.azimuth_angle = (360 + Math.toDegrees(mAz)) % 360;
+	    	  	withoutmedian = (360 + Math.toDegrees(actual_orientation[0])) % 360;
 	    	  	
 	    	  	
 	    	  	// set rotation and x,y-translation
@@ -370,6 +380,67 @@ public class MapSectionFragment extends Fragment{
 		filteredx = preAccelx;
 		filteredy = preAccely;
 	}  */
+	
+	
+	private void setAzHist()
+	{
+	    float[] hist = actual_orientation;
+	    if (mAzHist.size() == mHistoryMaxLength)
+	    {
+	        mAzHist.remove(mAzHistIndex);
+	    }   
+	    mAzHist.add(mAzHistIndex++, hist);
+	    mAzHistIndex %= mHistoryMaxLength;
+	}
+
+
+	public float median(List<float[]> values)
+	{
+	    float[] result = new float[values.size()];
+	    int len = result.length;
+	    int i = 0;
+	    for (float[] value : values)
+	    {
+	            result[i] = value[0];
+	            i++;
+	    }
+	   /* float temp;
+	    for(int k=0;k<len-1;k++)
+	    	{
+	    		for(int l=k+1;l<len;l++)
+	    		{
+	    			if(result[k]>result[l])
+	    				{
+	    					temp = result[k];
+	    					result[k] = result[l];
+	    					result[l] = temp;
+	    				}
+	    		}
+	    	}  */
+	    float temp;
+	    int min;
+	    for(int k=0;k<len-1;k++)
+	    {
+		    min = k;
+		    for(int l=k+1;l<len;l++)
+		    {
+			    if(result[min]>result[l])
+			    min = l;
+			 }
+		    if(min!=k)
+		    {
+		    	temp = result[min];
+			    result[min] = result[k];
+			    result[k] = temp;
+			}
+	    }
+	    
+	    if (len%2 == 1)
+	    	return result[len/2];
+	    else
+	    	return (float) ((result[len/2-1]+result[len/2])/2.0);
+	}
+	
 	// Map view
 	class MapView extends View
 	{
@@ -403,7 +474,8 @@ public class MapSectionFragment extends Fragment{
 		    //canvas.drawText("y: "+ymoved, 0, 400, paint);
 		    canvas.drawText("x: "+pointer.gridPoint.x, 0, 700, paint);
 		    canvas.drawText("y: "+pointer.gridPoint.y, 0, 400, paint);
-		    canvas.drawText("radian;"+actual_orientation[0], 0, 500, paint);
+		    canvas.drawText("radian;"+mAz, 0, 500, paint);
+		    canvas.drawText("without median;"+withoutmedian, 0, 200, paint);
 
 		}
 
