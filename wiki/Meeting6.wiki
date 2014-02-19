@@ -1,0 +1,20 @@
+# 6th Meeting 19 FEB 2013Spring
+
+= Introduction =
+  # Progress monitoring
+  # Pedometer - Completed
+  # Application Server - Completed
+  # Azimuth angle stabilization - Completed
+
+= Details =
+  * Testing (Tracey)
+  * Phone connection with server (a few days) (David)
+
+= Future Plan =
+  * Data collection and testing
+  * System enhancement
+  * Calibrate the app:
+    # credibility decaying function
+    # pixel/step ratio
+    # grid size
+    # pedometer sensitivity
