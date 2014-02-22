@@ -470,9 +470,11 @@ public class MapSectionFragment extends Fragment{
 		public void onReceive(Context c, Intent intent) {
             List<ScanResult> mScanResults = mWifiManager.getScanResults();
             rssi = 0;
+            double signalStrength = 0;
             for(ScanResult results : mScanResults){
-            	rssi += results.level;
+            	signalStrength += Math.pow(10, results.level);
             }
+            rssi = (int)Math.log10(signalStrength);
             if (pointer.isRSSILocating) {
             	new HTTPRequestTask().execute(prepareQueryString(SERVER_URL));
             }
@@ -514,19 +516,19 @@ public class MapSectionFragment extends Fragment{
 		            response = httpclient.execute(new HttpGet(uri[0]));
 		            StatusLine statusLine = response.getStatusLine();
 		            
-		            //if(statusLine.getStatusCode() == HttpStatus.SC_OK){
+		            if(statusLine.getStatusCode() == HttpStatus.SC_OK){
 		            //	Log.d("IndoorDebug", "Response status:OK");
 		                ByteArrayOutputStream out = new ByteArrayOutputStream();
 		                response.getEntity().writeTo(out);
 		                out.close();
 		                responseString = out.toString();
-		        /*    
-		        } else{
+		            
+		            } else{
 		                //Closes the connection.
 		                response.getEntity().getContent().close();
 		                throw new IOException(statusLine.getReasonPhrase());
 		            }
-		            */
+		            
 		        } catch (ClientProtocolException e) {
 		            //TODO Handle problems..
 		        } catch (IOException e) {
@@ -541,13 +543,15 @@ public class MapSectionFragment extends Fragment{
 		        super.onPostExecute(result);
 		        //Do anything with response..
 		        try {
-					JSONObject jsonObj = new JSONObject(result);
-					serverStatusMsg = jsonObj.getString("status");
-					if (serverStatusMsg.equals("MOBILE_UPDATE") ) {
-						pointer.setGridPoint(jsonObj.getInt("xcoor"), jsonObj.getInt("ycoor"));
-						pointer.credibility = jsonObj.getDouble("credibility");
-						
-					}
+		        	if(result != null) {
+						JSONObject jsonObj = new JSONObject(result);
+						serverStatusMsg = jsonObj.getString("status");
+						if (serverStatusMsg.equals("MOBILE_UPDATE") ) {
+							pointer.setGridPoint(jsonObj.getInt("xcoor"), jsonObj.getInt("ycoor"));
+							pointer.credibility = jsonObj.getDouble("credibility");
+							
+						}
+		        	}
 				} catch (JSONException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();

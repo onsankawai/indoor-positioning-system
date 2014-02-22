@@ -121,7 +121,7 @@ public class MapPointer {
 	}
 	
 	protected void decayCredibilityPerStep() {
-		credibility -= 0.01;
+		credibility -= 0.02;
 		
 	}
 	
