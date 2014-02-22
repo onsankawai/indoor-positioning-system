@@ -14,7 +14,7 @@ import android.util.Log;
 public class StepDetector implements SensorEventListener
 {
     private final static String TAG = "StepDetector";
-    private float   mLimit = (float) 3; //default 3
+    private float   mLimit = (float) 4; //default 3
     private float   mLastValues[] = new float[3*2];
     private float   mScale[] = new float[2];
     private float   mYOffset;

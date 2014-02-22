@@ -24,6 +24,8 @@ public class MapPointer {
     double roll_angle;
     int gridSize;
     Matrix position;
+    boolean isRSSILocating = false;
+    double credibility = 0.0;
 	
 	public MapPointer(int gridSize) {
 		point = new Point(350,550);
@@ -36,11 +38,22 @@ public class MapPointer {
 		this.gridSize = gridSize;
 	}
 	
+	public static void initWifiManager() {
+		
+	}
+	
 	protected void setPoint(int x, int y) {
 		this.point.x = x;
 		this.point.y = y;
 		this.gridPoint.x = x/gridSize;
 		this.gridPoint.y = y/gridSize;
+	}
+	
+	protected void setGridPoint(int grid_x, int grid_y) {
+		this.gridPoint.x = grid_x;
+		this.gridPoint.y = grid_y;
+		this.point.x = this.gridPoint.x * gridSize + gridSize/2;
+		this.point.y = this.gridPoint.y * gridSize + gridSize/2;
 	}
 	
 	protected void computePedometer(double x, double y) {
@@ -106,6 +119,12 @@ public class MapPointer {
 		
 		return bearing;
 	}
+	
+	protected void decayCredibilityPerStep() {
+		credibility -= 0.01;
+		
+	}
+	
 	
 	
 }

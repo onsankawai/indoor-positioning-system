@@ -3,18 +3,27 @@ package fyp.hkust.doorposition;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.apache.http.NameValuePair;
 import org.apache.http.StatusLine;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.message.BasicNameValuePair;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import android.support.v4.app.Fragment;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -26,9 +35,9 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.location.Location;
-import android.location.LocationListener;
 import android.location.LocationManager;
+import android.net.wifi.ScanResult;
+import android.net.wifi.WifiManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
@@ -43,48 +52,21 @@ public class MapSectionFragment extends Fragment{
 
 	private int mapWidth = 0;
 	private int mapHeight = 0;
-	private float accuracy = 0;
-	
 	private float[] actual_orientation = new float[3];
 	private int mSteps;
 	private final double stepSize = 0.7;
 	private double xmoved = 0;
 	private double ymoved = 0;
-	private double latitude = 0;
-	private double longitude = 0;
-	
-	double x = 0;     // current position
-	double vx = 0;     // current velocity
-	double y = 0;     // current y position
-	double vy = 0;     // current y velocity
-	long lastTime = System.currentTimeMillis();      // previous time, nanoseconds
-	long newTime = 0;       // current time
-	float accelx = 0;
-	float accely = 0;
-	float accelz = 0;
-	float preAccelx = 0;
-	float preAccely = 0;
-	float preAccelz = 0;
-	float resultAccelx = 0;
-	float resultAccely = 0;
-	float resultAccelz = 0;
-	float filteredx = 0;
-	float filteredy = 0;
-	double timepassed = 0;
-	
 	float[] mRotationMatrix = new float[16];
 	private List<float[]> mAzHist = new ArrayList<float[]>();
 	private int mAzHistIndex;
-	private int mHistoryMaxLength = 50;
+	private int mHistoryMaxLength = 10;
 	private float mAz = Float.NaN;
 	private double withoutmedian;
 	
 	private SensorManager mAccManager;
 	private Sensor mAccelerometer; 
 
-	private SensorManager mLinearManager;
-	private Sensor mLinear; 
-	
 	private SensorManager mMagManager;
 	private Sensor mMagnetic;
 	
@@ -113,6 +95,11 @@ public class MapSectionFragment extends Fragment{
 	Rect ptrDisplayRect;
 	//Bitmap bmp2;
 	LocationManager locationManager;
+	WifiManager mWifiManager;
+	WifiDataReceiver mReceiver;
+	
+	String serverStatusMsg;
+	final String SERVER_URL = "http://hkust-fyp-ece-td-1-13.appspot.com/update";
 	
 	public MapSectionFragment() {
 	}
@@ -151,6 +138,10 @@ public class MapSectionFragment extends Fragment{
 		pointer.computeCoordinate(pointer.refLat2, pointer.refLon2);
 		//pointerDisplayRect = new Rect(0,0,40,40);
 		
+		mWifiManager = (WifiManager)this.getActivity().getSystemService(Context.WIFI_SERVICE);
+		mReceiver = new WifiDataReceiver();
+		this.getActivity().registerReceiver(mReceiver, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
+		
 		return mapViewGroup;
 		
 	}
@@ -175,15 +166,6 @@ public class MapSectionFragment extends Fragment{
 		mAccManager = (SensorManager) this.getActivity().getSystemService(Context.SENSOR_SERVICE);
 	    mAccelerometer = mAccManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
 	    mAccManager.registerListener(sensorListener, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL); 
-		
-	    // linear accelerometer senor init
-	    mLinearManager = (SensorManager) this.getActivity().getSystemService(Context.SENSOR_SERVICE);
-	    mLinear = mLinearManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
-	    mLinearManager.registerListener(sensorListener, mLinear, SensorManager.SENSOR_DELAY_NORMAL); 
-		
-		// location manager init
-		//locationManager = (LocationManager) this.getActivity().getSystemService(Context.LOCATION_SERVICE);	
-		//locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
 	    
 	    // Step Detector init
 	    mSensorManager = (SensorManager) this.getActivity().getSystemService(Context.SENSOR_SERVICE);
@@ -225,6 +207,8 @@ public class MapSectionFragment extends Fragment{
                xmoved = stepSize * Math.cos(-mAz);
                ymoved = stepSize * Math.sin(-mAz);
                pointer.computePedometer(xmoved, ymoved);
+               pointer.decayCredibilityPerStep();
+               mWifiManager.startScan();
                
 	    	  	// set rotation and x,y-translation
 			    Matrix mtx = new Matrix();
@@ -232,8 +216,7 @@ public class MapSectionFragment extends Fragment{
 				mtx.postTranslate(pointer.point.x, pointer.point.y);
 				mtx.postTranslate(-pointerPic.getWidth()/2, -pointerPic.getHeight()/2);
 				pointer.position.set(mtx);
-				//pointer.position.setRotate((float) pointer.azimuth_angle - 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
-				//pointer.position.postTranslate(pointer.point.x, pointer.point.y);
+
 				
 		    }
             
@@ -241,44 +224,6 @@ public class MapSectionFragment extends Fragment{
         
     };	
 
-	// GPS location sensor
-	protected LocationListener locationListener = new LocationListener() {
-
-		@Override
-		public void onLocationChanged(Location location) {
-			// TODO Auto-generated method stub
-			//Log.d("IndoorDebug", "latitude:" + location.getLatitude());
-			//Log.d("IndoorDebug", "longitude:" + location.getLongitude());
-			accuracy = location.getAccuracy();
-			latitude = location.getLatitude();
-			longitude = location.getLongitude();
-			if (accuracy <= 6.0) {
-				
-				//bearing = location.getBearing();
-				pointer.computeCoordinate(latitude, longitude);
-			}
-			map.postInvalidate();
-		}
-
-		@Override
-		public void onProviderDisabled(String provider) {
-			// TODO Auto-generated method stub
-			
-		}
-
-		@Override
-		public void onProviderEnabled(String provider) {
-			// TODO Auto-generated method stub
-			
-		}
-
-		@Override
-		public void onStatusChanged(String provider, int status, Bundle extras) {
-			// TODO Auto-generated method stub
-			
-		}
-		
-	};
 	
 	// Orientation, motion sensor
 	protected SensorEventListener sensorListener = new SensorEventListener() {
@@ -313,59 +258,23 @@ public class MapSectionFragment extends Fragment{
 
 		        SensorManager.getRotationMatrix(mRotationMatrix, I, accValues, geomagnetic);		        
 		        SensorManager.getOrientation(mRotationMatrix, actual_orientation);
-		        setAzHist();
-    			mAz = median(mAzHist);
-	    	  	pointer.azimuth_angle = (360 + Math.toDegrees(mAz)) % 360;
-	    	  	withoutmedian = (360 + Math.toDegrees(actual_orientation[0])) % 360;
-	    	  	
-	    	  	
-	    	  	// set rotation and x,y-translation
-			    Matrix mtx = new Matrix();
-				mtx.postRotate((float) pointer.azimuth_angle - 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
-				mtx.postTranslate(pointer.point.x, pointer.point.y);
-				mtx.postTranslate(-pointerPic.getWidth()/2, -pointerPic.getHeight()/2);
-				pointer.position.set(mtx);
-				//pointer.position.setRotate((float) pointer.azimuth_angle - 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
-				//pointer.position.postTranslate(pointer.point.x, pointer.point.y);
+		        
+		        
+		        if(setAzHist()) {  
+	    			mAz = median(mAzHist);
+		    	  	pointer.azimuth_angle = (360 + Math.toDegrees(mAz)) % 360;
+		    	  	
+		    	  	// set rotation and x,y-translation
+				    Matrix mtx = new Matrix();
+					mtx.postRotate((float) pointer.azimuth_angle - 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
+					mtx.postTranslate(pointer.point.x, pointer.point.y);
+					mtx.postTranslate(-pointerPic.getWidth()/2, -pointerPic.getHeight()/2);
+					pointer.position.set(mtx);
+		        }
+		        
+		        withoutmedian = (360 + Math.toDegrees(actual_orientation[0])) % 360;
 				
 		    }
-	/*	    if (linearValues != null) {
-		        accelx = linearValues[0] * 100 ;   // X axis is our axis of acceleration
-		        accely = linearValues[1] * 100 ;   // Y axis is our axis of acceleration
-		        accelz = linearValues[2] * 100 ;   // Y axis is our axis of acceleration
-		    /*    preAccelx = accelx * kFilteringFactor + preAccelx * (1.0f - kFilteringFactor); 
-		        preAccely = accely * kFilteringFactor + preAccely * (1.0f - kFilteringFactor);
-		        resultAccelx = accelx - preAccelx;
-		        resultAccely = accely - preAccely;   */
-/*		        float updateFreq = 30; // match this to your update speed
-		        float cutOffFreq = 0.9f;
-		        float RC = 1.0f / cutOffFreq;
-		        float dt = 1.0f / updateFreq;
-		        float filterConstant = RC / (dt + RC);
-		        float alpha = filterConstant; 
-		        float kAccelerometerMinStep = 0.033f;
-		        float kAccelerometerNoiseAttenuation = 3.0f;
-	            float d = clamp(Math.abs(norm(preAccelx, preAccely, preAccelz) - norm(accelx, accely, accelz)) 
-	            		/ kAccelerometerMinStep - 1.0f, 0.0f, 1.0f);
-	            alpha = d * filterConstant / kAccelerometerNoiseAttenuation + (1.0f - d) * filterConstant;
-	        
-
-		        preAccelx = (float) (alpha * (preAccelx + accelx - resultAccelx));
-		        preAccely = (float) (alpha * (preAccely + accely - resultAccely));
-		        preAccelz = (float) (alpha * (preAccelz + accelz - resultAccelz));
-
-		        resultAccelx = accelx;
-		        resultAccely = accely;
-		        resultAccelz = accelz;
-		        newTime = event.timestamp;
-		        timepassed = (newTime - lastTime) * 0.000000001;
-		        vx += accelx * timepassed;
-		        x += vx * timepassed;
-		        vy += accely * timepassed;
-		        y += vy * timepassed;
-		        lastTime = newTime;
-		           
-		    } */
 		    	
 		    map.postInvalidate();
 		    
@@ -374,23 +283,19 @@ public class MapSectionFragment extends Fragment{
 		
 	};
 	
-	/*	private void calibration() {
-		xNoise = accelx;
-		yNoise = accely;
-		filteredx = preAccelx;
-		filteredy = preAccely;
-	}  */
 	
-	
-	private void setAzHist()
+	private boolean setAzHist()
 	{
+		
 	    float[] hist = actual_orientation;
+	    mAzHistIndex %= mHistoryMaxLength;
 	    if (mAzHist.size() == mHistoryMaxLength)
 	    {
 	        mAzHist.remove(mAzHistIndex);
 	    }   
 	    mAzHist.add(mAzHistIndex++, hist);
-	    mAzHistIndex %= mHistoryMaxLength;
+	    
+	    return (mAzHistIndex == mHistoryMaxLength);
 	}
 
 
@@ -472,10 +377,10 @@ public class MapSectionFragment extends Fragment{
 		    canvas.drawText("Step: "+mSteps, 0, 600, paint);
 		    //canvas.drawText("x: "+xmoved, 0, 700, paint);
 		    //canvas.drawText("y: "+ymoved, 0, 400, paint);
-		    canvas.drawText("x: "+pointer.gridPoint.x, 0, 700, paint);
-		    canvas.drawText("y: "+pointer.gridPoint.y, 0, 400, paint);
+		    canvas.drawText("rssi: "+mReceiver.rssi, 0, 700, paint);
+		    canvas.drawText("cred: "+pointer.credibility, 0, 400, paint);
 		    canvas.drawText("radian;"+mAz, 0, 500, paint);
-		    canvas.drawText("without median;"+withoutmedian, 0, 200, paint);
+		    canvas.drawText("Server Msg;"+serverStatusMsg, 0, 200, paint);
 
 		}
 
@@ -505,6 +410,8 @@ public class MapSectionFragment extends Fragment{
 		
 		public void getRefPoint() {
 			pointer.setPoint(380, 256);
+			pointer.credibility = 1.0;
+			pointer.isRSSILocating = true;
 			this.invalidate();
 		}
 
@@ -539,22 +446,6 @@ public class MapSectionFragment extends Fragment{
 				
 			});
 			
-			// Calibrate Button
-	/*		calibrateBtn = new Button(context);
-			calibrateBtn.setHeight(80);
-			calibrateBtn.setWidth(100);
-			calibrateBtn.setText("Start");
-			calibrateBtn.setLayoutParams(new LayoutParams(LayoutParams.WRAP_CONTENT,
-					LayoutParams.WRAP_CONTENT));
-			calibrateBtn.setOnClickListener(new OnClickListener() {
-
-				@Override
-				public void onClick(View arg0) {
-					// TODO Auto-generated method stub
-					calibration();
-				}
-				
-			});  */
 			
 			this.addView(map);
 			this.addView(getRefPointBtn);
@@ -574,40 +465,97 @@ public class MapSectionFragment extends Fragment{
 		
 	}
 	
-	class HTTPRequestTask extends AsyncTask<String, String, String>{
+	class WifiDataReceiver extends BroadcastReceiver {
+		int rssi;
+		public void onReceive(Context c, Intent intent) {
+            List<ScanResult> mScanResults = mWifiManager.getScanResults();
+            rssi = 0;
+            for(ScanResult results : mScanResults){
+            	rssi += results.level;
+            }
+            if (pointer.isRSSILocating) {
+            	new HTTPRequestTask().execute(prepareQueryString(SERVER_URL));
+            }
+        }
+        
+        protected String prepareQueryString(String url){
+		    if(!url.endsWith("?"))
+		        url += "?";
 
-	    @Override
-	    protected String doInBackground(String... uri) {
-	        HttpClient httpclient = new DefaultHttpClient();
-	        HttpResponse response;
-	        String responseString = null;
-	        try {
-	            response = httpclient.execute(new HttpGet(uri[0]));
-	            StatusLine statusLine = response.getStatusLine();
-	            if(statusLine.getStatusCode() == HttpStatus.SC_OK){
-	                ByteArrayOutputStream out = new ByteArrayOutputStream();
-	                response.getEntity().writeTo(out);
-	                out.close();
-	                responseString = out.toString();
-	            } else{
-	                //Closes the connection.
-	                response.getEntity().getContent().close();
-	                throw new IOException(statusLine.getReasonPhrase());
-	            }
-	        } catch (ClientProtocolException e) {
-	            //TODO Handle problems..
-	        } catch (IOException e) {
-	            //TODO Handle problems..
-	        }
-	        return responseString;
-	    }
+		    List<NameValuePair> params = new LinkedList<NameValuePair>();
 
-	    @Override
-	    protected void onPostExecute(String result) {
-	        super.onPostExecute(result);
-	        //Do anything with response..
-	    }
-	}
+		  
+		    params.add(new BasicNameValuePair("map_name", "atrium"));
+	        params.add(new BasicNameValuePair("xcoor", String.valueOf(pointer.gridPoint.x)));
+	        params.add(new BasicNameValuePair("ycoor", String.valueOf(pointer.gridPoint.y)));
+		
+	        params.add(new BasicNameValuePair("rssi", String.valueOf(rssi)));
+	        params.add(new BasicNameValuePair("credibility",String.valueOf(pointer.credibility)));
+
+		    String paramString = URLEncodedUtils.format(params, "utf-8");
+
+		    url += paramString;
+		    return url;
+		}
+    }
 	
+	// AsyncTask for updating the MapPointer locations
+		class HTTPRequestTask extends AsyncTask<String, String, String>{
+			
+		    @Override
+		    protected String doInBackground(String... uri) {
+		    	
+		    	
+		    	
+		        HttpClient httpclient = new DefaultHttpClient();
+		        HttpResponse response;
+		        String responseString = null;
+		        try {
+		            response = httpclient.execute(new HttpGet(uri[0]));
+		            StatusLine statusLine = response.getStatusLine();
+		            
+		            //if(statusLine.getStatusCode() == HttpStatus.SC_OK){
+		            //	Log.d("IndoorDebug", "Response status:OK");
+		                ByteArrayOutputStream out = new ByteArrayOutputStream();
+		                response.getEntity().writeTo(out);
+		                out.close();
+		                responseString = out.toString();
+		        /*    
+		        } else{
+		                //Closes the connection.
+		                response.getEntity().getContent().close();
+		                throw new IOException(statusLine.getReasonPhrase());
+		            }
+		            */
+		        } catch (ClientProtocolException e) {
+		            //TODO Handle problems..
+		        } catch (IOException e) {
+		            //TODO Handle problems..
+		        }
+		        Log.d("IndoorDebug", "Response Msg:"+responseString);
+		        return responseString;
+		    }
+
+		    @Override
+		    protected void onPostExecute(String result) {
+		        super.onPostExecute(result);
+		        //Do anything with response..
+		        try {
+					JSONObject jsonObj = new JSONObject(result);
+					serverStatusMsg = jsonObj.getString("status");
+					if (serverStatusMsg.equals("MOBILE_UPDATE") ) {
+						pointer.setGridPoint(jsonObj.getInt("xcoor"), jsonObj.getInt("ycoor"));
+						pointer.credibility = jsonObj.getDouble("credibility");
+						
+					}
+				} catch (JSONException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+		        map.postInvalidate();
+		    }
+		    
+		    
+		}
 
 }
