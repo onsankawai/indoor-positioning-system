@@ -210,13 +210,14 @@ public class MapSectionFragment extends Fragment{
                pointer.decayCredibilityPerStep();
                mWifiManager.startScan();
                
+               
 	    	  	// set rotation and x,y-translation
 			    Matrix mtx = new Matrix();
-				mtx.postRotate((float) pointer.azimuth_angle - 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
+				mtx.postRotate((float) pointer.azimuth_angle + 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
 				mtx.postTranslate(pointer.point.x, pointer.point.y);
 				mtx.postTranslate(-pointerPic.getWidth()/2, -pointerPic.getHeight()/2);
 				pointer.position.set(mtx);
-
+				
 				
 		    }
             
@@ -266,10 +267,11 @@ public class MapSectionFragment extends Fragment{
 		    	  	
 		    	  	// set rotation and x,y-translation
 				    Matrix mtx = new Matrix();
-					mtx.postRotate((float) pointer.azimuth_angle - 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
+					mtx.postRotate((float) pointer.azimuth_angle + 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
 					mtx.postTranslate(pointer.point.x, pointer.point.y);
 					mtx.postTranslate(-pointerPic.getWidth()/2, -pointerPic.getHeight()/2);
 					pointer.position.set(mtx);
+					
 		        }
 		        
 		        withoutmedian = (360 + Math.toDegrees(actual_orientation[0])) % 360;

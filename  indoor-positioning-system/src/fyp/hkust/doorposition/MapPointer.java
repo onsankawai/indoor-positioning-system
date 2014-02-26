@@ -61,7 +61,7 @@ public class MapPointer {
 		double pixelDisty = y * pixelPerMeter;
 		Log.d("IndoorDebug","pixelDist:"+pixelDistx+pixelDisty);
 		
-		setPoint((int) (point.x + pixelDistx),  (int) (point.y - pixelDisty));
+		setPoint((int) (point.x - pixelDistx),  (int) (point.y + pixelDisty));
 		//point.x = (int) (point.x + pixelDistx);
 		//point.y = (int) (point.y - pixelDisty);
 		Log.d("IndoorDebug","gridx:"+gridPoint.x);
