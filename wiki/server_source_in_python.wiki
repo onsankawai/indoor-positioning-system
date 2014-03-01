@@ -1,0 +1,140 @@
+#Server source in python
+
+= Application Server Overview =
+  * Current attributes stored: grid_x, grid_y, rssi, credibility
+  * Method: HTTP get requests for query, JSON encoded string for responses
+
+= Source Code =
+
+{{{
+import cgi
+import urllib
+
+import json
+import webapp2
+
+from google.appengine.ext import ndb
+
+class Location(ndb.Model):
+	"""Models a location signature entry with x,y coordinates and RSSI + other possible signatures"""
+	xcoor = ndb.IntegerProperty()
+	ycoor = ndb.IntegerProperty()
+	rssi = ndb.IntegerProperty()
+	credibility = ndb.FloatProperty()
+	date = ndb.DateTimeProperty(auto_now_add=True)
+
+	@classmethod
+	def query_map(cls, ancestor_key):
+	# ancestor key must be place at the back because it is a "magic word"!
+		return cls.query(ancestor=ancestor_key)		
+
+class ViewMap(webapp2.RequestHandler):
+	def get(self):
+		# View map location data here
+		self.response.out.write('<html><body>Hello World!')
+		map_name = self.request.get('map_name')
+		
+		location_key = ndb.Key("Map", map_name or "*no_name*")
+		locations = Location.query_map(location_key).fetch(10)
+	
+		self.response.out.write('Map: %s\n' % map_name)
+		for location in locations:
+			self.response.out.write('<blockquote>X:%s Y:%s RSSI:%s Credibility:%s Date:%s</blockquote>' %
+                              (location.xcoor, location.ycoor, location.rssi, location.credibility, location.date ))
+		
+class SaveLocation(webapp2.RequestHandler):
+	def get(self):
+		# Saving grid coordinates with corresponding RSSI/ other indexes
+		map_name = self.request.get('map_name')
+
+		location = Location(parent=ndb.Key('Map', map_name), 
+																				xcoor = int(self.request.get('xcoor')), 
+																				ycoor = int(self.request.get('ycoor')), 
+																				rssi = int(self.request.get('rssi')),
+																				credibility = float(self.request.get('credibility')))
+		location.put()
+		self.redirect('/?' + urllib.urlencode({'map_name':map_name}))
+
+class UpdateLocation(webapp2.RequestHandler):
+	def get(self):
+		# updating grid coordinates with corresponding RSSI/ other indexes
+		self.response.headers['Content-Type'] = 'application/json'
+		
+		map_name = self.request.get('map_name')
+		
+		location_key = ndb.Key("Map", map_name or "*no_name*")
+		locations = Location.query( Location.xcoor == int(self.request.get('xcoor')),
+																Location.ycoor == int(self.request.get('ycoor')),
+																ancestor=location_key).fetch(1)
+		
+		local_credibility = float(self.request.get('credibility'))
+		local_rssi = int(self.request.get('rssi'))
+		
+		result = json.dumps({'status':'NO_CHANGE'})
+		location = locations[0]
+		if location.credibility <= local_credibility:
+			# update database as local data is more trustworthy
+			location.rssi = local_rssi
+			location.credibility = local_credibility
+			location.put()
+			result = json.dumps({'status':'SERVER_UPDATE'})
+		elif local_credibility < 0.7:
+			# update mobile client with database entry as local data is not trustworthy
+			# closest_matched_location = getClosestMatch(local_rssi, location_key)
+			closest_matched_location = self.getClosestMatch(local_rssi, location_key)
+			if closest_matched_location is not None:
+				if closest_matched_location.credibility > local_credibility:
+					# Update mobile client
+					result = json.dumps({'status':'MOBILE_UPDATE', 
+																'xcoor':closest_matched_location.xcoor,
+																'ycoor':closest_matched_location.ycoor,
+																'credibility':closest_matched_location.credibility})
+		
+		self.response.out.write(result)
+		
+	def getClosestMatch(self, rssi, location_key):
+		# Return location entry with closest rssi value
+		for i in range(1, 6):
+			locations = Location.query(Location.rssi >= rssi-i,
+															Location.rssi <= rssi+i,
+															ancestor=location_key).fetch(1)
+			if len(locations) > 0:
+				return locations[0]
+		
+		# No matches
+		return None
+		
+class InitMapData(webapp2.RequestHandler):
+	def get(self):
+		# Initialize map data with all possible x,y with credibility set to 0
+		map_name = self.request.get('map_name')
+		rows = int(self.request.get('rows'))
+		cols = int(self.request.get('cols'))
+		
+		for j in range(rows):
+			for i in range(cols):
+				location = Location(parent=ndb.Key('Map', map_name), 
+																				xcoor = i, 
+																				ycoor = j, 
+																				rssi = 0,
+																				credibility = 0.0)
+				location.put()
+				
+		self.redirect('/?' + urllib.urlencode({'map_name':map_name}))
+		
+class ClearMapData(webapp2.RequestHandler):
+	def get(self):
+		# Clear all map data
+		map_name = self.request.get('map_name')
+		location_key = ndb.Key("Map", map_name or "*no_name*")
+		ndb.delete_multi(Location.query(ancestor=location_key).fetch(keys_only=True))
+		
+		
+app = webapp2.WSGIApplication([
+	('/', ViewMap),
+	('/save', SaveLocation),
+	('/init', InitMapData),
+	('/update', UpdateLocation),
+	('/clear', ClearMapData)
+])
+}}}
