@@ -47,11 +47,7 @@ class SaveLocation(webapp2.RequestHandler):
 		# Saving grid coordinates with corresponding RSSI/ other indexes
 		map_name = self.request.get('map_name')
 
-		location = Location(parent=ndb.Key('Map', map_name), 
-																				xcoor = int(self.request.get('xcoor')), 
-																				ycoor = int(self.request.get('ycoor')), 
-																				rssi = int(self.request.get('rssi')),
-																				credibility = float(self.request.get('credibility')))
+		location = Location(parent=ndb.Key('Map', map_name), xcoor = int(self.request.get('xcoor')), ycoor = int(self.request.get('ycoor')), rssi = int(self.request.get('rssi')), credibility = float(self.request.get('credibility')))
 		location.put()
 		self.redirect('/?' + urllib.urlencode({'map_name':map_name}))
 
@@ -63,9 +59,7 @@ class UpdateLocation(webapp2.RequestHandler):
 		map_name = self.request.get('map_name')
 		
 		location_key = ndb.Key("Map", map_name or "*no_name*")
-		locations = Location.query( Location.xcoor == int(self.request.get('xcoor')),
-																Location.ycoor == int(self.request.get('ycoor')),
-																ancestor=location_key).fetch(1)
+		locations = Location.query( Location.xcoor == int(self.request.get('xcoor')), Location.ycoor == int(self.request.get('ycoor')), ancestor=location_key).fetch(1)
 		
 		local_credibility = float(self.request.get('credibility'))
 		local_rssi = int(self.request.get('rssi'))
@@ -85,19 +79,14 @@ class UpdateLocation(webapp2.RequestHandler):
 			if closest_matched_location is not None:
 				if closest_matched_location.credibility > local_credibility:
 					# Update mobile client
-					result = json.dumps({'status':'MOBILE_UPDATE', 
-																'xcoor':closest_matched_location.xcoor,
-																'ycoor':closest_matched_location.ycoor,
-																'credibility':closest_matched_location.credibility})
+					result = json.dumps({'status':'MOBILE_UPDATE', 'xcoor':closest_matched_location.xcoor, 'ycoor':closest_matched_location.ycoor, 'credibility':closest_matched_location.credibility})
 		
 		self.response.out.write(result)
 		
 	def getClosestMatch(self, rssi, location_key):
 		# Return location entry with closest rssi value
 		for i in range(1, 6):
-			locations = Location.query(Location.rssi >= rssi-i,
-															Location.rssi <= rssi+i,
-															ancestor=location_key).fetch(1)
+			locations = Location.query(Location.rssi >= rssi-i, Location.rssi <= rssi+i, ancestor=location_key).fetch(1)
 			if len(locations) > 0:
 				return locations[0]
 		
@@ -113,11 +102,7 @@ class InitMapData(webapp2.RequestHandler):
 		
 		for j in range(rows):
 			for i in range(cols):
-				location = Location(parent=ndb.Key('Map', map_name), 
-																				xcoor = i, 
-																				ycoor = j, 
-																				rssi = 0,
-																				credibility = 0.0)
+				location = Location(parent=ndb.Key('Map', map_name), xcoor = i, ycoor = j,	rssi = 0, credibility = 0.0)
 				location.put()
 				
 		self.redirect('/?' + urllib.urlencode({'map_name':map_name}))
