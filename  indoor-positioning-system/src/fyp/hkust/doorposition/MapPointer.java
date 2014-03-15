@@ -2,21 +2,17 @@ package fyp.hkust.doorposition;
 
 import android.graphics.Matrix;
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.util.Log;
 
 public class MapPointer {
 
-	private final double refLat1 = Math.toRadians(22.33766425); // ref Point's latitude (radians) 22.3375019
-	private final double refLon1 = Math.toRadians(114.26420386); // ref Point's longitude (radians) 
 	public final double refLat2 = 22.337506;
 	public final double refLon2 = 114.26414883;
-	private final double EARTH_RADIUS = 6371000; // earth's radius in meters
-	private final double D_REF_PT_PIXEL = 275.0;
-	private final double DEGREE_OFFSET = 90;
+	private final double PIXEL_PER_METER = 58.0/3.72;
 	
-	private double pixelPerMeter;
-	
-	private Point refPoint;
+	protected Point center;
+	protected Rect pointerDisplayRect;
 	public Point point;
 	public Point gridPoint;
 	double azimuth_angle;
@@ -30,16 +26,19 @@ public class MapPointer {
 	public MapPointer(int gridSize) {
 		point = new Point(350,550);
 		gridPoint = new Point(350/gridSize, 550/gridSize);
-		refPoint = new Point(242,130);
+		new Point(242,130);
 		position = new Matrix();
-		double d = computeMeterDistanceFromRef(refLat2,refLon2);
-		pixelPerMeter = D_REF_PT_PIXEL / d;
-		Log.d("IndoorDebug","pixelPerMeter:"+pixelPerMeter);
+		//double d = computeMeterDistanceFromRef(refLat2,refLon2);
+		Log.d("IndoorDebug","pixelPerMeter:"+PIXEL_PER_METER);
 		this.gridSize = gridSize;
 	}
 	
-	public static void initWifiManager() {
-		
+	public Rect getPointerDisplayRect() {
+		return pointerDisplayRect;
+	}
+	
+	public Point getCenter() {
+		return center;
 	}
 	
 	protected void setPoint(int x, int y) {
@@ -56,12 +55,16 @@ public class MapPointer {
 		this.point.y = this.gridPoint.y * gridSize + gridSize/2;
 	}
 	
-	protected void computePedometer(double x, double y) {
-		double pixelDistx = x * pixelPerMeter;
-		double pixelDisty = y * pixelPerMeter;
+	protected void computePedometer(double x, double y, Rect boundary) {
+		double pixelDistx = x * PIXEL_PER_METER;
+		double pixelDisty = y * PIXEL_PER_METER;
 		Log.d("IndoorDebug","pixelDist:"+pixelDistx+pixelDisty);
+		int newX = (int) (point.x - pixelDistx);
+		int newY = (int) (point.y + pixelDisty);
+		if (boundary.contains(newX, newY)) {
+			setPoint(newX,  newY);
 		
-		setPoint((int) (point.x - pixelDistx),  (int) (point.y + pixelDisty));
+		}
 		//point.x = (int) (point.x + pixelDistx);
 		//point.y = (int) (point.y - pixelDisty);
 		Log.d("IndoorDebug","gridx:"+gridPoint.x);
@@ -69,7 +72,7 @@ public class MapPointer {
 		//Log.d("IndoorDebug","bearing:"+bearing);
 		
 	}
-	
+	/*
 	protected void computeCoordinate(double lat, double lon) {
 		double d = computeMeterDistanceFromRef(lat,lon);
 		double pixelDist = d * pixelPerMeter;
@@ -119,7 +122,7 @@ public class MapPointer {
 		
 		return bearing;
 	}
-	
+	*/
 	protected void decayCredibilityPerStep() {
 		credibility -= 0.02;
 		

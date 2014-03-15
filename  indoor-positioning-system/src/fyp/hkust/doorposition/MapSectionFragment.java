@@ -47,13 +47,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.ImageView;
 
 public class MapSectionFragment extends Fragment{
 
-	private int mapWidth = 0;
-	private int mapHeight = 0;
 	private float[] actual_orientation = new float[3];
-	private int mSteps;
 	private final double stepSize = 0.7;
 	private double xmoved = 0;
 	private double ymoved = 0;
@@ -62,8 +60,6 @@ public class MapSectionFragment extends Fragment{
 	private int mAzHistIndex;
 	private int mHistoryMaxLength = 10;
 	private float mAz = Float.NaN;
-	private double withoutmedian;
-	
 	private SensorManager mAccManager;
 	private Sensor mAccelerometer; 
 
@@ -84,6 +80,7 @@ public class MapSectionFragment extends Fragment{
     float linearValues[];
     boolean sensorReady;
 	int gridSize;
+	int mSteps = 0;
     
 	MapView map;
 	MapViewGroup mapViewGroup;
@@ -92,11 +89,11 @@ public class MapSectionFragment extends Fragment{
 	Bitmap pointerPic;
 	Paint paint;
 	Rect mapDisplayRect;
-	Rect ptrDisplayRect;
 	//Bitmap bmp2;
 	LocationManager locationManager;
 	WifiManager mWifiManager;
 	WifiDataReceiver mReceiver;
+	MapDisplayer mapDisplayer;
 	
 	String serverStatusMsg;
 	final String SERVER_URL = "http://hkust-fyp-ece-td-1-13.appspot.com/update";
@@ -119,14 +116,17 @@ public class MapSectionFragment extends Fragment{
 		// Create paint object
 		paint = new Paint();
 		
+		/*
 		mapDisplayRect = new Rect(0,0,mapWidth,mapHeight);
 		// Create bitmap - MAP
 		Bitmap bmp = BitmapFactory.decodeResource(getResources(), R.drawable.atrium_map);
 		mapPic = Bitmap.createBitmap(bmp);
+		*/
 		
-		ptrDisplayRect = new Rect(350, 550, 400, 600); 
+		mapDisplayer = new MapDisplayer(this.getActivity());
+		
 		// Create bitmap - pointer
-		bmp = BitmapFactory.decodeResource(getResources(), R.drawable.pointer);
+		Bitmap bmp = BitmapFactory.decodeResource(getResources(), R.drawable.pointer);
 		pointerPic = Bitmap.createScaledBitmap(bmp, 40, 40,true);
 		//pointerPic = Bitmap.createBitmap(bmp);
 		
@@ -135,7 +135,7 @@ public class MapSectionFragment extends Fragment{
 		
 		// Create Pointer
 		pointer = new MapPointer(gridSize);
-		pointer.computeCoordinate(pointer.refLat2, pointer.refLon2);
+		//pointer.computeCoordinate(pointer.refLat2, pointer.refLon2);
 		//pointerDisplayRect = new Rect(0,0,40,40);
 		
 		mWifiManager = (WifiManager)this.getActivity().getSystemService(Context.WIFI_SERVICE);
@@ -191,33 +191,28 @@ public class MapSectionFragment extends Fragment{
 		
 		Log.d("IndoorDebug", "Width:" + width);
 		Log.d("IndoorDebug", "Height:" + height);
-		mapWidth = width;
-		mapHeight = height-160;
-		
 		// 32*32 sq. pixel for N4 phone screen and 768 * 1024 map, 24 * 32 grids
 		gridSize = 32;
     }
     
     private StepDisplayer.Listener mStepListener = new StepDisplayer.Listener() {
         public void stepsChanged(int value) {
-        		mSteps = value;
-
-	            // Calculate distance moved
+        		// Calculate distance moved
 	    	  	//  distance += stepSize;
                xmoved = stepSize * Math.cos(-mAz);
                ymoved = stepSize * Math.sin(-mAz);
-               pointer.computePedometer(xmoved, ymoved);
+               pointer.computePedometer(xmoved, ymoved, mapDisplayer.currentDisplayRect);
                pointer.decayCredibilityPerStep();
                mWifiManager.startScan();
-               
+               mSteps++;
                
 	    	  	// set rotation and x,y-translation
 			    Matrix mtx = new Matrix();
-				mtx.postRotate((float) pointer.azimuth_angle + 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
-				mtx.postTranslate(pointer.point.x, pointer.point.y);
-				mtx.postTranslate(-pointerPic.getWidth()/2, -pointerPic.getHeight()/2);
-				pointer.position.set(mtx);
-				
+				mtx.postRotate((float) -(pointer.azimuth_angle + 90), pointerPic.getWidth()/2, pointerPic.getHeight()/2);
+				mtx.postTranslate(-pointer.point.x, -pointer.point.y);
+				mtx.postTranslate(pointerPic.getWidth()/2, pointerPic.getHeight()/2);
+				//pointer.position.set(mtx);
+				//mapDisplayer.xformMatrix.set(mtx);
 				
 		    }
             
@@ -261,20 +256,25 @@ public class MapSectionFragment extends Fragment{
 		        SensorManager.getOrientation(mRotationMatrix, actual_orientation);
 		        
 		        
-		        if(setAzHist()) {  
-	    			mAz = median(mAzHist);
-		    	  	pointer.azimuth_angle = (360 + Math.toDegrees(mAz)) % 360;
-		    	  	
+		        //if(setAzHist()) {
+		        setAzHist();
+		        	LowPassFilter.smoothValues(mAzHist, mAzHistIndex-1);
+	    			//mAz = median(mAzHist);
+		        	mAz = (mAzHist.get(mAzHistIndex-1))[0];
+	    			double newAngle = (360 + Math.toDegrees(mAz)) % 360;
+		    	  	pointer.azimuth_angle = Math.abs(pointer.azimuth_angle - newAngle) < 2 ? pointer.azimuth_angle : newAngle;
+	    			//pointer.azimuth_angle = newAngle;
 		    	  	// set rotation and x,y-translation
 				    Matrix mtx = new Matrix();
-					mtx.postRotate((float) pointer.azimuth_angle + 90, pointerPic.getWidth()/2, pointerPic.getHeight()/2);
-					mtx.postTranslate(pointer.point.x, pointer.point.y);
-					mtx.postTranslate(-pointerPic.getWidth()/2, -pointerPic.getHeight()/2);
-					pointer.position.set(mtx);
+					mtx.postRotate((float) -(pointer.azimuth_angle + 90), pointerPic.getWidth()/2, pointerPic.getHeight()/2);
+					mtx.postTranslate(-pointer.point.x, -pointer.point.y);
+					mtx.postTranslate(pointerPic.getWidth()/2, pointerPic.getHeight()/2);
 					
-		        }
+					//pointer.position.set(mtx);
+					//mapDisplayer.xformMatrix.set(mtx);
+		       // }
 		        
-		        withoutmedian = (360 + Math.toDegrees(actual_orientation[0])) % 360;
+		        //withoutmedian = (360 + Math.toDegrees(actual_orientation[0])) % 360;
 				
 		    }
 		    	
@@ -311,19 +311,7 @@ public class MapSectionFragment extends Fragment{
 	            result[i] = value[0];
 	            i++;
 	    }
-	   /* float temp;
-	    for(int k=0;k<len-1;k++)
-	    	{
-	    		for(int l=k+1;l<len;l++)
-	    		{
-	    			if(result[k]>result[l])
-	    				{
-	    					temp = result[k];
-	    					result[k] = result[l];
-	    					result[l] = temp;
-	    				}
-	    		}
-	    	}  */
+
 	    float temp;
 	    int min;
 	    for(int k=0;k<len-1;k++)
@@ -360,30 +348,47 @@ public class MapSectionFragment extends Fragment{
 			gridPaint.setColor(getResources().getColor(R.color.light_grey));
 			gridPaint.setAlpha(127);
 			gridPaint.setStyle(Paint.Style.FILL);
+			
 		}
 		
 		
 		@Override
 		protected void onDraw(Canvas canvas){
-			
-			canvas.drawBitmap(mapPic, null, mapDisplayRect, paint);
+			//canvas.setMatrix(null);
+			canvas.translate(this.getRight()/2 - pointer.point.x, this.getBottom()/2 - pointer.point.y);
+			canvas.rotate((float)-(pointer.azimuth_angle - 90), pointer.point.x, pointer.point.y);
+			canvas.drawBitmap(mapDisplayer.getCurrentMap(), null, mapDisplayer.getCurrentDisplayRect(), paint);
 			drawGrid(canvas);
-			canvas.drawBitmap(pointerPic, pointer.position, paint);
+			//canvas.drawBitmap(pointerPic, null, pointer.getPointerDisplayRect(), paint);
+			//canvas.drawBitmap(pointerPic, pointer.position, paint);
 
 			paint.setColor(getResources().getColor(R.color.red));
 			paint.setTextSize(40);
 		    //canvas.drawCircle(380, 84, 6, paint);
-		    canvas.drawCircle(380, 256, 6, paint);
-		    canvas.drawCircle(516, 256, 6, paint);
+		    canvas.drawCircle(pointer.point.x, pointer.point.y, 6, paint);
+		    canvas.drawCircle(this.getRight()/2, this.getBottom()/2, 6, paint);
+		    canvas.drawCircle(14*32+4, 15*32, 6, paint);
+		    canvas.drawCircle(16*32-2, 15*32, 6, paint);
+		    canvas.drawText("x: "+this.getRight()/2, 0, 300, paint);
+		    canvas.drawText("y: "+this.getBottom()/2, 0, 400, paint);
+		    //canvas.drawCircle(516, 256, 6, paint);
+		    /*
 		    canvas.drawText("azimuth: "+pointer.azimuth_angle, 0, 300, paint);
 		    canvas.drawText("Step: "+mSteps, 0, 600, paint);
-		    //canvas.drawText("x: "+xmoved, 0, 700, paint);
-		    //canvas.drawText("y: "+ymoved, 0, 400, paint);
+		    canvas.drawText("x: "+xmoved, 0, 700, paint);
+		    canvas.drawText("y: "+ymoved, 0, 400, paint);
 		    canvas.drawText("rssi: "+mReceiver.rssi, 0, 700, paint);
 		    canvas.drawText("cred: "+pointer.credibility, 0, 400, paint);
 		    canvas.drawText("radian;"+mAz, 0, 500, paint);
 		    canvas.drawText("Server Msg;"+serverStatusMsg, 0, 200, paint);
-
+			*/
+		    //canvas.concat(mapDisplayer.xformMatrix);
+		    //canvas.rotate((float)(pointer.azimuth_angle - 90), pointer.getCenter().x, pointer.getCenter().y);
+		    canvas.setMatrix(null);
+		    //canvas.drawBitmap(pointerPic, null, pointer.getPointerDisplayRect(), paint);
+		    canvas.drawText("azimuth: "+pointer.azimuth_angle, 0, 700, paint);
+		    canvas.drawText("Step: "+mSteps, 0, 600, paint);
+		    
 		}
 
 		public void handleScroll(float distanceX, float distanceY) {
@@ -400,6 +405,7 @@ public class MapSectionFragment extends Fragment{
 			for(int j = 1; j < vertGrids; j++) {
 				canvas.drawLine(0, j*gridSize, 768, j*gridSize, gridPaint);
 			}
+			
 			// highlight the current grid
 			int gridPosX = pointer.gridPoint.x * gridSize;
 			int gridPosY = pointer.gridPoint.y * gridSize;
@@ -408,10 +414,11 @@ public class MapSectionFragment extends Fragment{
 							gridPosX + gridSize, 
 							gridPosY + gridSize, 
 							gridPaint);
+							
 		}
 		
 		public void getRefPoint() {
-			pointer.setPoint(380, 256);
+			pointer.setPoint(480, 192);
 			pointer.credibility = 1.0;
 			pointer.isRSSILocating = true;
 			this.invalidate();
@@ -423,6 +430,7 @@ public class MapSectionFragment extends Fragment{
 	{
 		MapView map;
 		Button getRefPointBtn;
+		ImageView mPointer;
 	//	Button calibrateBtn;
 
 		public MapViewGroup(Context context, MapView mapView) {
@@ -430,7 +438,8 @@ public class MapSectionFragment extends Fragment{
 			// TODO Auto-generated constructor stub
 			// Get map vieww 
 			map = mapView;
-			
+			mPointer = new ImageView(context);
+			mPointer.setImageBitmap(pointerPic);
 			// Ref Point Btn
 			getRefPointBtn = new Button(context);
 			getRefPointBtn.setHeight(100);
@@ -451,9 +460,11 @@ public class MapSectionFragment extends Fragment{
 			
 			this.addView(map);
 			this.addView(getRefPointBtn);
+			this.addView(mPointer);
 	//		this.addView(calibrateBtn);
 		}
 
+		
 		// Set position of children, (left, top right bottom)
 		@Override
 		protected void onLayout(boolean changed, int l, int t, int r, int b) {
@@ -461,9 +472,11 @@ public class MapSectionFragment extends Fragment{
 			
 			map.layout(l, t, r, b);
 			getRefPointBtn.layout(l, t, r/6, b/6);
+			mPointer.layout(r/2-20, b/2-20, r/2+20, b/2+20);
 		//	calibrateBtn.layout(l+500, t+850, r, b);
 			
 		}
+		
 		
 	}
 	
