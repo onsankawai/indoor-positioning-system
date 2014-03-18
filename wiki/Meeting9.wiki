@@ -13,3 +13,5 @@
         * +3/-3 threshold match for more than X number of access points => location match
     * Adjust threshold value for closest match of RSSI data
     * Set threshold distance when looking for closest match location on server (assume the local location would not be too inaccurate)
+  * Mobile App revisions:
+    * Send requests to server upon grid change (currently upon step change)
