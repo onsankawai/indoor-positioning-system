@@ -3,6 +3,8 @@ package fyp.hkust.doorposition;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -357,7 +359,7 @@ public class MapSectionFragment extends Fragment{
 			//canvas.setMatrix(null);
 			canvas.translate(this.getRight()/2 - pointer.point.x, this.getBottom()/2 - pointer.point.y);
 			canvas.rotate((float)-(pointer.azimuth_angle - 90), pointer.point.x, pointer.point.y);
-			canvas.drawBitmap(mapDisplayer.getCurrentMap(), null, mapDisplayer.getCurrentDisplayRect(), paint);
+			canvas.drawBitmap(mapDisplayer.getCurrentMap().bitmap, null, mapDisplayer.getCurrentDisplayRect(), paint);
 			drawGrid(canvas);
 			//canvas.drawBitmap(pointerPic, null, pointer.getPointerDisplayRect(), paint);
 			//canvas.drawBitmap(pointerPic, pointer.position, paint);
@@ -397,8 +399,8 @@ public class MapSectionFragment extends Fragment{
 		}
 		
 		private void drawGrid(Canvas canvas) {
-			int horiGrids = 768/gridSize;
-			int vertGrids = 1024/gridSize;
+			int horiGrids = mapDisplayer.getCurrentWidth()/gridSize;
+			int vertGrids = mapDisplayer.getCurrentHeight()/gridSize;
 			for(int i = 1; i < horiGrids; i++) {
 				canvas.drawLine(i*gridSize, 0, i*gridSize, 1024, gridPaint);
 			}
@@ -481,15 +483,43 @@ public class MapSectionFragment extends Fragment{
 	}
 	
 	class WifiDataReceiver extends BroadcastReceiver {
-		int rssi;
+		String rssi;
+		
 		public void onReceive(Context c, Intent intent) {
             List<ScanResult> mScanResults = mWifiManager.getScanResults();
-            rssi = 0;
-            double signalStrength = 0;
+            // Sort the list according to rssi levels in desc order
+            Collections.sort(mScanResults, new Comparator<ScanResult>(){
+
+				@Override
+				public int compare(ScanResult lhs, ScanResult rhs) {
+					// TODO Auto-generated method stub
+					return (lhs.level < rhs.level ? 1 : (lhs.level == rhs.level ? 0 : -1));
+				}
+            	
+            });
+            rssi = "";
+            
+            //double signalStrength = 0;
+            int count = 0;
             for(ScanResult results : mScanResults){
-            	signalStrength += Math.pow(10, results.level);
+            	if(count > 3)
+            		break;
+            	
+            	if( results.SSID.equals("sMobileNet") ) {
+            		if( rssi.equals(""))
+            			rssi += results.BSSID+"!"+results.level;
+            		else
+            			rssi += "|"+results.BSSID+"!"+results.level;
+            		
+	            	Log.d("WIFITEST","BSSID:"+results.BSSID);
+	            	Log.d("WIFITEST","SSID:"+results.SSID);
+	            	Log.d("WIFITEST","frequency:"+results.frequency);
+	            	Log.d("WIFITEST","Level:"+results.level);
+	            	
+            	}
+            	count++;
             }
-            rssi = (int)Math.log10(signalStrength);
+            //rssi = (int)Math.log10(signalStrength);
             if (pointer.isRSSILocating) {
             	new HTTPRequestTask().execute(prepareQueryString(SERVER_URL));
             }
@@ -506,7 +536,7 @@ public class MapSectionFragment extends Fragment{
 	        params.add(new BasicNameValuePair("xcoor", String.valueOf(pointer.gridPoint.x)));
 	        params.add(new BasicNameValuePair("ycoor", String.valueOf(pointer.gridPoint.y)));
 		
-	        params.add(new BasicNameValuePair("rssi", String.valueOf(rssi)));
+	        params.add(new BasicNameValuePair("rssi", rssi));
 	        params.add(new BasicNameValuePair("credibility",String.valueOf(pointer.credibility)));
 
 		    String paramString = URLEncodedUtils.format(params, "utf-8");
