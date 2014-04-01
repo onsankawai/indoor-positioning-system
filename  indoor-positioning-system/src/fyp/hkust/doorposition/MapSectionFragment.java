@@ -199,23 +199,27 @@ public class MapSectionFragment extends Fragment{
     
     private StepDisplayer.Listener mStepListener = new StepDisplayer.Listener() {
         public void stepsChanged(int value) {
-        		// Calculate distance moved
-	    	  	//  distance += stepSize;
-               xmoved = stepSize * Math.cos(-mAz);
-               ymoved = stepSize * Math.sin(-mAz);
-               pointer.computePedometer(xmoved, ymoved, mapDisplayer.currentDisplayRect);
-               pointer.decayCredibilityPerStep();
-               mWifiManager.startScan();
-               mSteps++;
-               
-	    	  	// set rotation and x,y-translation
-			    Matrix mtx = new Matrix();
-				mtx.postRotate((float) -(pointer.azimuth_angle + 90), pointerPic.getWidth()/2, pointerPic.getHeight()/2);
-				mtx.postTranslate(-pointer.point.x, -pointer.point.y);
-				mtx.postTranslate(pointerPic.getWidth()/2, pointerPic.getHeight()/2);
-				//pointer.position.set(mtx);
-				//mapDisplayer.xformMatrix.set(mtx);
-				
+        		if (mStepDisplayer.getTimeElapsedMillis() > 350) {
+        			mStepDisplayer.updatePrevTimeMillis();
+	        		// Calculate distance moved
+		    	  	//  distance += stepSize;
+	               xmoved = stepSize * Math.cos(-mAz);
+	               ymoved = stepSize * Math.sin(-mAz);
+	               pointer.computePedometer(xmoved, ymoved, mapDisplayer.currentDisplayRect);
+	               pointer.decayCredibilityPerStep();
+	               
+	               if(pointer.isGridChanged())
+	            	   mWifiManager.startScan();
+	               
+	               mSteps++;
+	               
+		    	  	// set rotation and x,y-translation
+				    Matrix mtx = new Matrix();
+					mtx.postRotate((float) -(pointer.azimuth_angle + 90), pointerPic.getWidth()/2, pointerPic.getHeight()/2);
+					mtx.postTranslate(-pointer.point.x, -pointer.point.y);
+					mtx.postTranslate(pointerPic.getWidth()/2, pointerPic.getHeight()/2);
+					
+        		}
 		    }
             
             
@@ -423,6 +427,7 @@ public class MapSectionFragment extends Fragment{
 			pointer.setPoint(480, 192);
 			pointer.credibility = 1.0;
 			pointer.isRSSILocating = true;
+			mWifiManager.startScan();
 			this.invalidate();
 		}
 
@@ -505,22 +510,22 @@ public class MapSectionFragment extends Fragment{
             	if(count > 3)
             		break;
             	
-            	if( results.SSID.equals("sMobileNet") ) {
+            	if( results.SSID.equals("sMobileNet")) {
             		if( rssi.equals(""))
             			rssi += results.BSSID+"!"+results.level;
             		else
             			rssi += "|"+results.BSSID+"!"+results.level;
-            		
+            		Log.d("WIFITEST","Count:"+count);
 	            	Log.d("WIFITEST","BSSID:"+results.BSSID);
 	            	Log.d("WIFITEST","SSID:"+results.SSID);
 	            	Log.d("WIFITEST","frequency:"+results.frequency);
 	            	Log.d("WIFITEST","Level:"+results.level);
-	            	
+	            	count++;
             	}
-            	count++;
+            	
             }
             //rssi = (int)Math.log10(signalStrength);
-            if (pointer.isRSSILocating) {
+            if (pointer.isRSSILocating && count >= 2) {
             	new HTTPRequestTask().execute(prepareQueryString(SERVER_URL));
             }
         }

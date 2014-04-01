@@ -9,12 +9,13 @@ public class MapPointer {
 
 	public final double refLat2 = 22.337506;
 	public final double refLon2 = 114.26414883;
-	private final double PIXEL_PER_METER = 58.0/3.72;
+	private final double PIXEL_PER_METER = 60.0/3.72;
 	
 	protected Point center;
 	protected Rect pointerDisplayRect;
 	public Point point;
 	public Point gridPoint;
+	public Point prevGridPoint;
 	double azimuth_angle;
     double pitch_angle;
     double roll_angle;
@@ -26,6 +27,7 @@ public class MapPointer {
 	public MapPointer(int gridSize) {
 		point = new Point(350,550);
 		gridPoint = new Point(350/gridSize, 550/gridSize);
+		prevGridPoint = new Point(gridPoint.x, gridPoint.y);
 		new Point(242,130);
 		position = new Matrix();
 		//double d = computeMeterDistanceFromRef(refLat2,refLon2);
@@ -44,8 +46,14 @@ public class MapPointer {
 	protected void setPoint(int x, int y) {
 		this.point.x = x;
 		this.point.y = y;
+		this.prevGridPoint.x = this.gridPoint.x;
+		this.prevGridPoint.y = this.gridPoint.y;
 		this.gridPoint.x = x/gridSize;
 		this.gridPoint.y = y/gridSize;
+	}
+	
+	protected boolean isGridChanged() {
+		return (this.prevGridPoint.x == this.gridPoint.x && this.prevGridPoint.y == this.gridPoint.y ? false : true);
 	}
 	
 	protected void setGridPoint(int grid_x, int grid_y) {

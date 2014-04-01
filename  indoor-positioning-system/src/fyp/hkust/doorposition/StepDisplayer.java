@@ -2,6 +2,8 @@ package fyp.hkust.doorposition;
 
 import java.util.ArrayList;
 
+import android.os.SystemClock;
+
 
 
 /**
@@ -11,9 +13,22 @@ import java.util.ArrayList;
 public class StepDisplayer implements StepListener {
 
     private int mCount = 0;
+    private long mPrevTimeMillis;
+    private long mCurTimeMillis;
 
     public StepDisplayer() {
+    	mPrevTimeMillis = SystemClock.uptimeMillis();
+    	mCurTimeMillis = mPrevTimeMillis;
         notifyListener();
+    }
+    
+    public long getTimeElapsedMillis() {
+    	mCurTimeMillis = SystemClock.uptimeMillis();
+    	return mCurTimeMillis - mPrevTimeMillis; 
+    }
+    
+    public void updatePrevTimeMillis() {
+    	mPrevTimeMillis = mCurTimeMillis;
     }
 
     public void setSteps(int steps) {
