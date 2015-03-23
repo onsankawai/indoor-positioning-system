@@ -1,0 +1,13 @@
+# 7th Meeting 3 MAR 2014Spring
+
+# Introduction #
+  1. Revise map, pointer implementation
+  1. Revise WiFi-localization logic
+
+# Details #
+  * Implement Map-moving instead of Pointer-moving
+  * Use better atrium map
+  * Application server logic changes:
+    * Separate RSSI values according to different APs
+    * Pairwise AP RSSI matching
+    * Check specific SSID as target?

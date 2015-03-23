@@ -1,0 +1,17 @@
+# 9th Meeting 18 MAR 2014Spring
+
+# Introduction #
+  1. Revise WiFi-localization logic
+  1. Revise map orientation setting (not exact 90 deg, ~95 deg)
+
+# Details #
+  * Application Server logic revisions:
+    * Manipulate rssi data according to SSID/ frequency
+      * Revise NDB model, use structured property
+      * Filter out sMobileNet access points
+      * Match for each BSSID,Level pair
+        * +3/-3 threshold match for more than X number of access points => location match
+    * Adjust threshold value for closest match of RSSI data
+    * Set threshold distance when looking for closest match location on server (assume the local location would not be too inaccurate)
+  * Mobile App revisions:
+    * Send requests to server upon grid change (currently upon step change)
